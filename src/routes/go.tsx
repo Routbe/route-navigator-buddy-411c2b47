@@ -1,8 +1,9 @@
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { RoutLogo } from "@/components/RoutLogo";
+import { verifyGoLink } from "@/lib/go-link.functions";
 
-type GoSearch = { i?: string; a?: string; w?: string };
+type GoSearch = { i?: string; a?: string; w?: string; s?: string };
 
 /** Pick the right destination from the user agent, entirely client-side. */
 function pickTarget(ua: string, s: GoSearch): string | undefined {
@@ -16,12 +17,49 @@ function pickTarget(ua: string, s: GoSearch): string | undefined {
 function GoPage() {
   const search = useSearch({ from: "/go" });
   const [target, setTarget] = useState<string | undefined>();
+  const [needsConfirm, setNeedsConfirm] = useState(false);
 
   useEffect(() => {
-    const to = pickTarget(navigator.userAgent, search);
+    const s = search as GoSearch;
+    const to = pickTarget(navigator.userAgent, s);
     setTarget(to);
-    if (to) window.location.replace(to);
+    if (!to) return;
+    let safe = false;
+    try {
+      const p = new URL(to).protocol;
+      safe = p === "https:" || p === "http:";
+    } catch {
+      safe = false;
+    }
+    if (!safe) {
+      setTarget(undefined);
+      return;
+    }
+    verifyGoLink({ data: { i: s.i, a: s.a, w: s.w, s: s.s } })
+      .then((r) => (r.valid ? window.location.replace(to) : setNeedsConfirm(true)))
+      .catch(() => setNeedsConfirm(true));
   }, [search]);
+
+  if (needsConfirm && target) {
+    let host = target;
+    try {
+      host = new URL(target).host;
+    } catch {
+      /* keep raw */
+    }
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-6 px-6 text-center">
+        <RoutLogo size={26} />
+        <h1 className="font-display text-2xl text-foreground">You are leaving ROUT</h1>
+        <p className="max-w-md text-sm text-muted-foreground">
+          This link sends you to <span className="font-mono text-foreground">{host}</span>. Only continue if you trust it.
+        </p>
+        <a href={target} rel="noopener noreferrer nofollow" className="text-sm text-foreground underline underline-offset-4">
+          Continue to {host}
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-6 px-6 text-center">

@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { InfoHint } from "@/components/InfoHint";
 import { PAYMENT_METHODS, buildPaymentPayload, isPaymentType } from "@/lib/payments";
 import { isRichType, buildRichPayload } from "@/lib/rich-qr";
+import { signGoLink } from "@/lib/go-link.functions";
 import { suggestFilename } from "@/lib/brand";
 
 import { ValuesSection } from "@/components/ValuesSection";
@@ -290,11 +291,35 @@ const Index = () => {
   ]);
 
   // Final value encoded in the QR — swap in the short link when tracking is on (dynamic mode).
+  // Sign /go app links on the server so the router page trusts them.
+  const [signedGo, setSignedGo] = useState<{ from: string; to: string } | null>(null);
+  useEffect(() => {
+    if (!qrValue || !qrValue.includes("/go?")) return;
+    let cancelled = false;
+    try {
+      const u = new URL(qrValue);
+      const p = u.searchParams;
+      void signGoLink({ data: { i: p.get("i") ?? undefined, a: p.get("a") ?? undefined, w: p.get("w") ?? undefined } })
+        .then((r) => {
+          if (cancelled || !r.sig) return;
+          p.set("s", r.sig);
+          setSignedGo({ from: qrValue, to: u.toString() });
+        })
+        .catch(() => {});
+    } catch {
+      /* not a URL */
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [qrValue]);
+
   const finalQrValue = useMemo(() => {
     if (qrMode === "dynamic" && trackedQr && trackedQr.target_type === qrType)
       return trackedQr.redirect_url;
+    if (signedGo && signedGo.from === qrValue) return signedGo.to;
     return qrValue;
-  }, [qrMode, trackedQr, qrType, qrValue]);
+  }, [qrMode, trackedQr, qrType, qrValue, signedGo]);
 
   // Clear any minted tracked link when user switches back to Static mode.
   useEffect(() => {
