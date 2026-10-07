@@ -67,11 +67,24 @@ Alternatieve namen worden ook herkend (terugval): `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_
 | `BOOKING_TOKEN_SECRET` | Boekingslinks |
 | `ROUT_API_KEY` | Interne API |
 
-## 6. Herstelkanalen (optioneel)
+## 6. Bestandsopslag — Scaleway Object Storage (fr-par)
+
+| Key | Waarde / wat |
+|---|---|
+| `SCALEWAY_ACCESS_KEY`, `SCALEWAY_SECRET_KEY` | Scaleway → IAM → API keys (Object Storage) |
+| `SCALEWAY_ENDPOINT` | `https://s3.fr-par.scw.cloud` |
+| `SCALEWAY_REGION` | `fr-par` |
+| `SCALEWAY_CLIENT_BUCKET` | `rout-client-storage-prod` — profielfoto's, app-media, tijdelijke QR-bestanden |
+| `SCALEWAY_INTERNAL_BUCKET` | `rout-internal-prod` — perskit, officiële logo's (enkel beheerders) |
+| `SCALEWAY_DEFAULT_BUCKET` | `rout-storage-prod` — algemene terugval |
+
+Zonder sleutels vallen profielfoto's terug op Neon; QR-bestanden delen staat dan uit. Opruimen van verlopen QR-bestanden: cron `GET /api/public/cron/purge-shared-files` (dagelijks, header `x-cron-secret: LOVABLE_CRON_SECRET`).
+
+## 7. Herstelkanalen (optioneel)
 
 `TELEGRAM_BOT_TOKEN`, `SMS_GATEWAY_URL`, `SMS_GATEWAY_KEY`, `WHATSAPP_GATEWAY_URL`, `WHATSAPP_GATEWAY_KEY`.
 
-## 7. "Login met ROUT" (ROUT als provider voor andere apps)
+## 8. "Login met ROUT" (ROUT als provider voor andere apps)
 
 Alle variabelen voor die rol beginnen met `ROUT_PROVIDER_` en staan los van bovenstaande login-instellingen.
 

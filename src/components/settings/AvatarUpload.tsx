@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/UserAvatar";
 import { uploadAvatar } from "@/lib/avatar.functions";
 import { useI18n } from "@/lib/i18n";
+import { compressImageToWebP } from "@/lib/image-compression";
 import { toast } from "sonner";
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -18,9 +19,8 @@ interface Props {
 /**
  * Avatar picker: a visual preview plus two plain actions.
  *
- * The raw storage URL is deliberately never shown — the bytes land in our own
- * `avatars` bucket under the member's user id and the profile keeps a stable
- * app route, so there is nothing useful to paste or edit by hand.
+ * The raw storage URL is never shown — the bytes land in the Scaleway client
+ * bucket under the member's user id (Neon fallback when storage is off).
  */
 export function AvatarUpload({ value, name, onChange }: Props) {
   const { t } = useI18n();
@@ -40,18 +40,21 @@ export function AvatarUpload({ value, name, onChange }: Props) {
 
     setBusy(true);
     try {
+      // GIFs stay as-is (animation); everything else is shrunk to WebP first.
+      const blob: Blob =
+        file.type === "image/gif" ? file : await compressImageToWebP(file, 400).catch(() => file);
+      const contentType = (blob.type || file.type) as "image/jpeg" | "image/png" | "image/webp" | "image/gif";
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onerror = () => reject(new Error(t("avatar.err.read")));
         reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(blob);
       });
 
-      const ext = (file.name.split(".").pop() || "jpg").toLowerCase().slice(0, 5);
-      const result = await uploadAvatar({ data: { base64, contentType: file.type, ext } });
-      if (!result.ok || !result.path) throw new Error(result.message ?? t("avatar.err.upload"));
+      const result = await uploadAvatar({ data: { base64, contentType } });
+      if (!result.ok || !result.url) throw new Error(result.message ?? t("avatar.err.upload"));
 
-      onChange(`/api/public/avatar?path=${encodeURIComponent(result.path)}`);
+      onChange(result.url);
       toast.success(t("avatar.updated"));
     } catch (error) {
       toast.error(t("avatar.err.upload"), {

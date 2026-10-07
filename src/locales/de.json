@@ -526,7 +526,7 @@
   "menu.adminContact.hint": "Nachrichten aus dem Kontaktformular",
   "menu.adminPayments.hint": "Bankreferenzen & CSV-Export",
   "menu.adminPortal.hint": "Moderation & Verifizierungen",
-  "menu.api.hint": "Entwickler-Hub",
+  "menu.api.hint": "Manage apps, API keys & infrastructure",
   "menu.batch.hint": "QR-Massenerstellung",
   "menu.docs.hint": "AGPLv3 & Protokoll",
   "menu.domains.hint": "DNS- & CNAME-Konfiguration",

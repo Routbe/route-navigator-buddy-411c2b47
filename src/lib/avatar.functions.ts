@@ -1,49 +1,62 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireAuth } from "@/lib/auth/middleware";
 
 /**
- * Avatar uploads on our own infrastructure.
+ * Profile photo upload.
  *
- * There is no object store in the Neon stack, so an avatar is kept as a small
- * base64 blob in `public.avatar_objects` in Frankfurt and streamed back by
- * `/api/public/avatar`. Files are capped at 5 MB and always live under the
- * member's own user id.
+ * Primary: Scaleway client bucket (`users/<uid>/avatar/…`, public-read) and the
+ * full public URL is returned. Fallback when storage is not configured: the
+ * legacy Neon blob table, streamed by `/api/public/avatar`.
  */
-const MAX_BYTES = 5 * 1024 * 1024;
-const ALLOWED = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const schema = z
+  .object({
+    base64: z.string().min(16).max(7_200_000),
+    contentType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
+    ext: z.string().max(5).optional(),
+  })
+  .strict();
 
 export const uploadAvatar = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .inputValidator((input: { base64: string; contentType: string; ext: string }) => input)
-  .handler(async ({ data, context }): Promise<{ ok: boolean; path?: string; message?: string }> => {
-    if (!ALLOWED.includes(data.contentType)) {
-      return { ok: false, message: "Use a JPG, PNG, WebP or GIF image." };
-    }
-    const bytes = Math.floor((data.base64.length * 3) / 4);
-    if (bytes > MAX_BYTES) return { ok: false, message: "Keep the image under 5 MB." };
+  .inputValidator((input: unknown) => schema.parse(input))
+  .handler(
+    async ({ data, context }): Promise<{ ok: boolean; path?: string; url?: string; message?: string }> => {
+      const s = await import("@/lib/storage/s3.server");
+      const bytes = s.base64ToBytes(data.base64);
+      if (bytes.byteLength > s.MAX_UPLOAD_BYTES) return { ok: false, message: "Keep the image under 5 MB." };
+      const real = s.sniffType(bytes);
+      if (!real || !(s.IMAGE_TYPES as readonly string[]).includes(real)) {
+        return { ok: false, message: "Use a JPG, PNG, WebP or GIF image." };
+      }
 
-    const { sql } = await import("@/lib/neon");
-    const ext =
-      (data.ext || "jpg")
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "")
-        .slice(0, 5) || "jpg";
-    const path = `${context.userId}/avatar-${Date.now()}.${ext}`;
-    await sql.query(
-      `insert into public.avatar_objects (path, user_id, content_type, data)
-       values ($1, $2, $3, $4)
-       on conflict (path) do update set content_type = excluded.content_type, data = excluded.data`,
-      [path, context.userId, data.contentType, data.base64],
-    );
-    // Keep only the newest few uploads per member.
-    await sql.query(
-      `delete from public.avatar_objects
-       where user_id = $1
-         and path not in (
-           select path from public.avatar_objects where user_id = $1
-           order by created_at desc limit 3
-         )`,
-      [context.userId],
-    );
-    return { ok: true, path };
-  });
+      if (s.storageConfigured("client")) {
+        const key = `users/${context.userId}/avatar/${Date.now()}.${s.extFor(real)}`;
+        try {
+          await s.putObject("client", key, bytes, { contentType: real, publicRead: true });
+          return { ok: true, url: s.publicUrl("client", key) };
+        } catch (error) {
+          console.error("[avatar] Scaleway upload failed, falling back to Neon", error);
+        }
+      }
+
+      const { sql } = await import("@/lib/neon");
+      const path = `${context.userId}/avatar-${Date.now()}.${s.extFor(real)}`;
+      await sql.query(
+        `insert into public.avatar_objects (path, user_id, content_type, data)
+         values ($1, $2, $3, $4)
+         on conflict (path) do update set content_type = excluded.content_type, data = excluded.data`,
+        [path, context.userId, real, data.base64],
+      );
+      await sql.query(
+        `delete from public.avatar_objects
+         where user_id = $1
+           and path not in (
+             select path from public.avatar_objects where user_id = $1
+             order by created_at desc limit 3
+           )`,
+        [context.userId],
+      );
+      return { ok: true, path, url: `/api/public/avatar?path=${encodeURIComponent(path)}` };
+    },
+  );

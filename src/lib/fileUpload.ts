@@ -8,6 +8,8 @@ interface UploadResult {
 
 interface UploadOptions {
   onProgress?: (progress: number) => void;
+  /** How long the shared file stays available: 1, 7 or 30 days (default 7). */
+  days?: 1 | 7 | 30;
 }
 
 const ALLOWED_MIME_TYPES = [
@@ -20,7 +22,7 @@ const ALLOWED_MIME_TYPES = [
   "audio/mp3",
 ];
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB (server enforces the same)
 
 // Client-side pre-validation (actual validation happens server-side)
 const isValidMimeType = (file: File): boolean => {
@@ -43,7 +45,7 @@ export const uploadFile = async (
   if (file.size > MAX_FILE_SIZE) {
     return {
       success: false,
-      error: "File too large. Maximum size is 10MB.",
+      error: "File too large. Maximum size is 5MB.",
     };
   }
 
@@ -57,6 +59,7 @@ export const uploadFile = async (
   const formData = new FormData();
   formData.append("file", file);
   formData.append("type", type);
+  formData.append("days", String(options?.days ?? 7));
 
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();

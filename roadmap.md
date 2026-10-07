@@ -58,7 +58,7 @@
 - [x] Iconen: e-mail = envelop; eigen links = websitelogo of wereldbol; vCard met ingebedde foto.
 - [x] Profielteksten NL/EN/FR met Engels als standaard; geen links in bio's.
 - [x] Geboortedatum-pop-up vóór verificatieaanvragen.
-- [ ] db/46 en db/48 op Neon uitvoeren (wacht op DATABASE_URL; de app maakt de tabellen ook zelf aan).
+- [x] db/45, 46, 48, 49, 50, 51 op Neon uitgevoerd (okt 2026).
 - [ ] Google-geboortedatum (scope user.birthday.read) — wacht op jouw akkoord + Google-review.
 - [ ] Geboortedatumcontrole ook vóór andere betaalde acties.
 
@@ -67,3 +67,9 @@
 - [ ] Consumentennavigatie vervangen door één Developer Console-ingang.
 - [ ] Favicon en press kit herstellen met het officiële vrijstaande konijn.
 - [ ] Console- en pressroutes visueel en technisch controleren.
+
+## Developer Console + Scaleway (okt 2026)
+- [x] Neon gesynchroniseerd (db/45–51), console-velden + PKCE/testmodus/prompt=none in de OIDC-backend.
+- [ ] Scaleway: 3 buckets (client/internal/default), profielfoto + tijdelijke QR-bestanden (expires_at) + opruimjob.
+- [ ] Console-UI: één linkerzijbalk, app-pagina's (Dashboard, Publishing, Security, Advanced), Quick Start, Manifesto, beheer voor badge-aanvragen.
+- [ ] Press kit-logo's laden niet + transparante favicon.

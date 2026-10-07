@@ -1,63 +1,96 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ShieldCheck, Zap } from "lucide-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { useQueryClient } from "@tanstack/react-query";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { ConsoleCard, ConsolePage } from "@/components/console/ConsolePage";
+import { APPS_KEY, errorText } from "@/components/console/console-data";
 import { useAppPage } from "@/components/console/useAppPage";
+import { deleteOAuthClient } from "@/lib/oauth/console.functions";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute("/_authenticated/console/apps/$appId/security")({
   component: SecurityPage,
 });
 
-const FLOWS = [
-  { id: "seamless", icon: Zap, title: "Seamless", text: "Ingelogde gebruikers gaan met één klik verder." },
-  { id: "strict", icon: ShieldCheck, title: "Strict", text: "Altijd een 6-cijferige code per e-mail vóór toegang." },
-] as const;
+const TTLS = [
+  { s: 900, label: "15 min" },
+  { s: 3600, label: "1 hour" },
+  { s: 14400, label: "4 hours" },
+  { s: 86400, label: "24 hours" },
+];
 
 function SecurityPage() {
   const { appId } = Route.useParams();
-  const { app, persist, saving } = useAppPage(appId);
+  const { app, persistSettings, saving } = useAppPage(appId);
+  const [ips, setIps] = useState(app.allowedIps.join("\n"));
+  const [confirmName, setConfirmName] = useState("");
+  const remove = useServerFn(deleteOAuthClient);
+  const qc = useQueryClient();
+  const navigate = useNavigate();
 
   return (
-    <ConsolePage title="Security & Flows" description="Hoe streng ROUT is bij het aanmelden op je app.">
-      <ConsoleCard title="Flow">
-        <div role="radiogroup" className="grid gap-3 sm:grid-cols-2">
-          {FLOWS.map(({ id, icon: Icon, title, text }) => {
-            const active = app.flowPreference === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                disabled={saving}
-                onClick={() => !active && persist({ flowPreference: id })}
-                className={`rounded-xl border p-4 text-left transition-colors ${active ? "border-foreground bg-muted" : "border-border hover:border-foreground/40"}`}
-              >
-                <Icon className="mb-2 h-5 w-5" />
-                <p className="font-medium">{title}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{text}</p>
-              </button>
-            );
-          })}
-        </div>
-        <p className="mt-4 text-xs text-muted-foreground">
-          Ook in Seamless vraagt ROUT een code wanneer je app <code>prompt=login</code>, <code>max_age</code> of{" "}
-          <code>acr_values=urn:rout:acr:strict</code> meestuurt.
-        </p>
-      </ConsoleCard>
-      <ConsoleCard title="Rich Identity">
+    <ConsolePage title="Security" description="PKCE, token lifetime, network restrictions and the danger zone.">
+      <ConsoleCard title="Enforce PKCE (S256)">
         <div className="flex items-start gap-4">
           <p className="flex-1 text-sm text-muted-foreground">
-            Vraag gebruikers om hun publieke activiteit te delen. Ze zien een extra vinkje dat standaard uit staat; er wordt enkel iets gedeeld als zij het aanzetten.
+            Required for SPAs and mobile apps. Turning it off is only allowed for confidential server apps that authenticate with their client secret at the token endpoint.
           </p>
-          <Switch
-            aria-label="Rich Identity"
-            checked={app.richIdentityEnabled}
-            disabled={saving}
-            onCheckedChange={(on) => persist({ richIdentityEnabled: on })}
-          />
+          <Switch aria-label="Enforce PKCE" checked={app.requirePkce} disabled={saving || !app.hasSecret} onCheckedChange={(on) => persistSettings({ requirePkce: on })} />
         </div>
       </ConsoleCard>
+
+      <ConsoleCard title="Token lifetime" description="How long access and ID tokens stay valid.">
+        <div className="flex flex-wrap gap-2">
+          {TTLS.map((t) => (
+            <Button key={t.s} variant={app.accessTokenTtl === t.s ? "default" : "outline"} size="sm" disabled={saving} onClick={() => persistSettings({ accessTokenTtl: t.s })}>
+              {t.label}
+            </Button>
+          ))}
+        </div>
+      </ConsoleCard>
+
+      <ConsoleCard title="IP restrictions" description="Only these server IPs may call the token endpoint. One exact IPv4/IPv6 address per line; empty = any.">
+        <Textarea rows={4} className="font-mono text-xs" value={ips} onChange={(e) => setIps(e.target.value)} placeholder={"203.0.113.10\n2001:db8::1"} />
+        <Button
+          className="mt-3"
+          size="sm"
+          disabled={saving}
+          onClick={() => persistSettings({ allowedIps: [...new Set(ips.split(/\s+/).map((s) => s.trim()).filter(Boolean))] })}
+        >
+          Save IP list
+        </Button>
+      </ConsoleCard>
+
+      <section className="rounded-2xl border border-destructive/40 bg-card p-6">
+        <h2 className="text-base font-medium text-destructive">Delete app</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          All sign-ins through this app stop immediately. Type <span className="font-mono text-foreground">{app.name}</span> to confirm.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Input className="max-w-xs" value={confirmName} onChange={(e) => setConfirmName(e.target.value)} aria-label="Confirm app name" />
+          <Button
+            variant="destructive"
+            disabled={confirmName !== app.name}
+            onClick={async () => {
+              try {
+                await remove({ data: { id: app.id } });
+                await qc.invalidateQueries({ queryKey: APPS_KEY });
+                toast.success("App deleted");
+                navigate({ to: "/console/apps" });
+              } catch (e) {
+                toast.error(errorText(e, "Delete failed."));
+              }
+            }}
+          >
+            <Trash2 className="h-4 w-4" /> Delete app
+          </Button>
+        </div>
+      </section>
     </ConsolePage>
   );
 }

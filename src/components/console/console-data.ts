@@ -1,6 +1,6 @@
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listOAuthClients, saveOAuthClient } from "@/lib/oauth/console.functions";
+import { listOAuthClients, saveOAuthClient, saveOAuthClientSettings } from "@/lib/oauth/console.functions";
 
 export type ConsoleApp = {
   id: string;
@@ -17,7 +17,40 @@ export type ConsoleApp = {
   createdAt: string;
   flowPreference: "seamless" | "strict";
   richIdentityEnabled: boolean;
+  publishingStatus: "testing" | "production";
+  supportEmail: string | null;
+  legalOwner: string | null;
+  dpoEmail: string | null;
+  requirePkce: boolean;
+  accessTokenTtl: number;
+  allowedIps: string[];
+  accountDiscoveryEnabled: boolean;
 };
+
+export type SettingsPatch = Partial<
+  Pick<
+    ConsoleApp,
+    | "publishingStatus"
+    | "supportEmail"
+    | "legalOwner"
+    | "dpoEmail"
+    | "requirePkce"
+    | "accessTokenTtl"
+    | "allowedIps"
+    | "accountDiscoveryEnabled"
+  >
+>;
+
+/** Saves console settings (only the given fields change; validated server-side). */
+export function useSaveSettings() {
+  const save = useServerFn(saveOAuthClientSettings);
+  const qc = useQueryClient();
+  return async (app: ConsoleApp, patch: SettingsPatch) => {
+    const result = await save({ data: { id: app.id, ...patch } });
+    await qc.invalidateQueries({ queryKey: APPS_KEY });
+    return result;
+  };
+}
 
 export type AppPatch = Partial<
   Pick<
