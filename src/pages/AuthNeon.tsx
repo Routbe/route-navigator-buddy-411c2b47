@@ -233,7 +233,18 @@ export default function AuthNeon({ initialMode = "magic" }: { initialMode?: Mode
       }
       const result = await authClient.signIn.social({ provider: provider as never, callbackURL });
       const error = (result as { error?: { message?: string } } | undefined)?.error;
-      if (error) toast.error(error.message || t("auth.toast.failed"));
+      if (error) {
+        const e = error as { message?: string; code?: string; status?: number };
+        const name = provider.charAt(0).toUpperCase() + provider.slice(1);
+        const reason =
+          e.message ||
+          (e.code === "PROVIDER_NOT_FOUND" || /not found/i.test(e.code ?? "")
+            ? "deze provider is niet ingesteld op de server"
+            : e.status
+              ? `serverfout ${e.status}`
+              : "");
+        toast.error(reason ? `${name}: ${reason}` : t("auth.toast.failed"));
+      }
     } catch (err) {
       toast.error(errorMessage(err, t("auth.toast.failed")));
     } finally {
