@@ -59,6 +59,7 @@ import { Route as AuthIndexRouteImport } from './routes/auth.index'
 import { Route as AuthAuthViewRouteImport } from './routes/auth.$authView'
 import { Route as AuthBlueskyRouteImport } from './routes/auth.bluesky'
 import { Route as DevEmailsRouteImport } from './routes/dev.emails'
+import { Route as FIdRouteImport } from './routes/f.$id'
 import { Route as GiftCodeRouteImport } from './routes/gift_.$code'
 import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
 import { Route as RUsernameRouteImport } from './routes/r.$username'
@@ -101,6 +102,7 @@ import { Route as ApiPublicBlueskyCallbackRouteImport } from './routes/api_.publ
 import { Route as ApiPublicBlueskyClientMetadataDotjsonRouteImport } from './routes/api_.public.bluesky.client-metadata[.]json'
 import { Route as ApiPublicBlueskyStartRouteImport } from './routes/api_.public.bluesky.start'
 import { Route as ApiPublicCronCheckDnsRouteImport } from './routes/api_.public.cron.check-dns'
+import { Route as ApiPublicCronPurgeSharedFilesRouteImport } from './routes/api_.public.cron.purge-shared-files'
 import { Route as ApiPublicCronScanTransfersRouteImport } from './routes/api_.public.cron.scan-transfers'
 import { Route as ApiPublicCronSecureshieldBillingRouteImport } from './routes/api_.public.cron.secureshield-billing'
 import { Route as ApiPublicCronSyncFollowersRouteImport } from './routes/api_.public.cron.sync-followers'
@@ -110,6 +112,7 @@ import { Route as ApiPublicMastodonStartRouteImport } from './routes/api_.public
 import { Route as ApiPublicOauthTokenRouteImport } from './routes/api_.public.oauth.token'
 import { Route as ApiPublicOauthUserinfoRouteImport } from './routes/api_.public.oauth.userinfo'
 import { Route as ApiPublicOgHandleRouteImport } from './routes/api_.public.og.$handle'
+import { Route as ApiPublicQrUploadRouteImport } from './routes/api_.public.qr.upload'
 import { Route as ApiPublicSessionLogoutRouteImport } from './routes/api_.public.session.logout'
 import { Route as ApiPublicWebhooksBankingRouteImport } from './routes/api_.public.webhooks.banking'
 import { Route as AuthenticatedConsoleAppsAppIdIndexRouteImport } from './routes/_authenticated/console.apps.$appId.index'
@@ -370,6 +373,11 @@ const DevEmailsRoute = DevEmailsRouteImport.update({
   path: '/dev/emails',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FIdRoute = FIdRouteImport.update({
+  id: '/f/$id',
+  path: '/f/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GiftCodeRoute = GiftCodeRouteImport.update({
   id: '/gift_/$code',
   path: '/gift/$code',
@@ -597,6 +605,12 @@ const ApiPublicCronCheckDnsRoute = ApiPublicCronCheckDnsRouteImport.update({
   path: '/api/public/cron/check-dns',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicCronPurgeSharedFilesRoute =
+  ApiPublicCronPurgeSharedFilesRouteImport.update({
+    id: '/api_/public/cron/purge-shared-files',
+    path: '/api/public/cron/purge-shared-files',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicCronScanTransfersRoute =
   ApiPublicCronScanTransfersRouteImport.update({
     id: '/api_/public/cron/scan-transfers',
@@ -645,6 +659,11 @@ const ApiPublicOauthUserinfoRoute = ApiPublicOauthUserinfoRouteImport.update({
 const ApiPublicOgHandleRoute = ApiPublicOgHandleRouteImport.update({
   id: '/api_/public/og/$handle',
   path: '/api/public/og/$handle',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicQrUploadRoute = ApiPublicQrUploadRouteImport.update({
+  id: '/api_/public/qr/upload',
+  path: '/api/public/qr/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicSessionLogoutRoute = ApiPublicSessionLogoutRouteImport.update({
@@ -750,6 +769,7 @@ export interface FileRoutesByFullPath {
   '/auth/$authView': typeof AuthAuthViewRoute
   '/auth/bluesky': typeof AuthBlueskyRoute
   '/dev/emails': typeof DevEmailsRoute
+  '/f/$id': typeof FIdRoute
   '/gift/$code': typeof GiftCodeRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/r/$username': typeof RUsernameRoute
@@ -792,6 +812,7 @@ export interface FileRoutesByFullPath {
   '/api/public/bluesky/client-metadata.json': typeof ApiPublicBlueskyClientMetadataDotjsonRoute
   '/api/public/bluesky/start': typeof ApiPublicBlueskyStartRoute
   '/api/public/cron/check-dns': typeof ApiPublicCronCheckDnsRoute
+  '/api/public/cron/purge-shared-files': typeof ApiPublicCronPurgeSharedFilesRoute
   '/api/public/cron/scan-transfers': typeof ApiPublicCronScanTransfersRoute
   '/api/public/cron/secureshield-billing': typeof ApiPublicCronSecureshieldBillingRoute
   '/api/public/cron/sync-followers': typeof ApiPublicCronSyncFollowersRoute
@@ -801,6 +822,7 @@ export interface FileRoutesByFullPath {
   '/api/public/oauth/token': typeof ApiPublicOauthTokenRoute
   '/api/public/oauth/userinfo': typeof ApiPublicOauthUserinfoRoute
   '/api/public/og/$handle': typeof ApiPublicOgHandleRoute
+  '/api/public/qr/upload': typeof ApiPublicQrUploadRoute
   '/api/public/session/logout': typeof ApiPublicSessionLogoutRoute
   '/api/public/webhooks/banking': typeof ApiPublicWebhooksBankingRoute
   '/console/apps/': typeof AuthenticatedConsoleAppsIndexRoute
@@ -859,6 +881,7 @@ export interface FileRoutesByTo {
   '/auth/$authView': typeof AuthAuthViewRoute
   '/auth/bluesky': typeof AuthBlueskyRoute
   '/dev/emails': typeof DevEmailsRoute
+  '/f/$id': typeof FIdRoute
   '/gift/$code': typeof GiftCodeRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/r/$username': typeof RUsernameRoute
@@ -899,6 +922,7 @@ export interface FileRoutesByTo {
   '/api/public/bluesky/client-metadata.json': typeof ApiPublicBlueskyClientMetadataDotjsonRoute
   '/api/public/bluesky/start': typeof ApiPublicBlueskyStartRoute
   '/api/public/cron/check-dns': typeof ApiPublicCronCheckDnsRoute
+  '/api/public/cron/purge-shared-files': typeof ApiPublicCronPurgeSharedFilesRoute
   '/api/public/cron/scan-transfers': typeof ApiPublicCronScanTransfersRoute
   '/api/public/cron/secureshield-billing': typeof ApiPublicCronSecureshieldBillingRoute
   '/api/public/cron/sync-followers': typeof ApiPublicCronSyncFollowersRoute
@@ -908,6 +932,7 @@ export interface FileRoutesByTo {
   '/api/public/oauth/token': typeof ApiPublicOauthTokenRoute
   '/api/public/oauth/userinfo': typeof ApiPublicOauthUserinfoRoute
   '/api/public/og/$handle': typeof ApiPublicOgHandleRoute
+  '/api/public/qr/upload': typeof ApiPublicQrUploadRoute
   '/api/public/session/logout': typeof ApiPublicSessionLogoutRoute
   '/api/public/webhooks/banking': typeof ApiPublicWebhooksBankingRoute
   '/console/apps': typeof AuthenticatedConsoleAppsIndexRoute
@@ -970,6 +995,7 @@ export interface FileRoutesById {
   '/auth/$authView': typeof AuthAuthViewRoute
   '/auth/bluesky': typeof AuthBlueskyRoute
   '/dev/emails': typeof DevEmailsRoute
+  '/f/$id': typeof FIdRoute
   '/gift_/$code': typeof GiftCodeRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/r/$username': typeof RUsernameRoute
@@ -1012,6 +1038,7 @@ export interface FileRoutesById {
   '/api_/public/bluesky/client-metadata.json': typeof ApiPublicBlueskyClientMetadataDotjsonRoute
   '/api_/public/bluesky/start': typeof ApiPublicBlueskyStartRoute
   '/api_/public/cron/check-dns': typeof ApiPublicCronCheckDnsRoute
+  '/api_/public/cron/purge-shared-files': typeof ApiPublicCronPurgeSharedFilesRoute
   '/api_/public/cron/scan-transfers': typeof ApiPublicCronScanTransfersRoute
   '/api_/public/cron/secureshield-billing': typeof ApiPublicCronSecureshieldBillingRoute
   '/api_/public/cron/sync-followers': typeof ApiPublicCronSyncFollowersRoute
@@ -1021,6 +1048,7 @@ export interface FileRoutesById {
   '/api_/public/oauth/token': typeof ApiPublicOauthTokenRoute
   '/api_/public/oauth/userinfo': typeof ApiPublicOauthUserinfoRoute
   '/api_/public/og/$handle': typeof ApiPublicOgHandleRoute
+  '/api_/public/qr/upload': typeof ApiPublicQrUploadRoute
   '/api_/public/session/logout': typeof ApiPublicSessionLogoutRoute
   '/api_/public/webhooks/banking': typeof ApiPublicWebhooksBankingRoute
   '/_authenticated/console/apps/': typeof AuthenticatedConsoleAppsIndexRoute
@@ -1083,6 +1111,7 @@ export interface FileRouteTypes {
     | '/auth/$authView'
     | '/auth/bluesky'
     | '/dev/emails'
+    | '/f/$id'
     | '/gift/$code'
     | '/oauth/authorize'
     | '/r/$username'
@@ -1125,6 +1154,7 @@ export interface FileRouteTypes {
     | '/api/public/bluesky/client-metadata.json'
     | '/api/public/bluesky/start'
     | '/api/public/cron/check-dns'
+    | '/api/public/cron/purge-shared-files'
     | '/api/public/cron/scan-transfers'
     | '/api/public/cron/secureshield-billing'
     | '/api/public/cron/sync-followers'
@@ -1134,6 +1164,7 @@ export interface FileRouteTypes {
     | '/api/public/oauth/token'
     | '/api/public/oauth/userinfo'
     | '/api/public/og/$handle'
+    | '/api/public/qr/upload'
     | '/api/public/session/logout'
     | '/api/public/webhooks/banking'
     | '/console/apps/'
@@ -1192,6 +1223,7 @@ export interface FileRouteTypes {
     | '/auth/$authView'
     | '/auth/bluesky'
     | '/dev/emails'
+    | '/f/$id'
     | '/gift/$code'
     | '/oauth/authorize'
     | '/r/$username'
@@ -1232,6 +1264,7 @@ export interface FileRouteTypes {
     | '/api/public/bluesky/client-metadata.json'
     | '/api/public/bluesky/start'
     | '/api/public/cron/check-dns'
+    | '/api/public/cron/purge-shared-files'
     | '/api/public/cron/scan-transfers'
     | '/api/public/cron/secureshield-billing'
     | '/api/public/cron/sync-followers'
@@ -1241,6 +1274,7 @@ export interface FileRouteTypes {
     | '/api/public/oauth/token'
     | '/api/public/oauth/userinfo'
     | '/api/public/og/$handle'
+    | '/api/public/qr/upload'
     | '/api/public/session/logout'
     | '/api/public/webhooks/banking'
     | '/console/apps'
@@ -1302,6 +1336,7 @@ export interface FileRouteTypes {
     | '/auth/$authView'
     | '/auth/bluesky'
     | '/dev/emails'
+    | '/f/$id'
     | '/gift_/$code'
     | '/oauth/authorize'
     | '/r/$username'
@@ -1344,6 +1379,7 @@ export interface FileRouteTypes {
     | '/api_/public/bluesky/client-metadata.json'
     | '/api_/public/bluesky/start'
     | '/api_/public/cron/check-dns'
+    | '/api_/public/cron/purge-shared-files'
     | '/api_/public/cron/scan-transfers'
     | '/api_/public/cron/secureshield-billing'
     | '/api_/public/cron/sync-followers'
@@ -1353,6 +1389,7 @@ export interface FileRouteTypes {
     | '/api_/public/oauth/token'
     | '/api_/public/oauth/userinfo'
     | '/api_/public/og/$handle'
+    | '/api_/public/qr/upload'
     | '/api_/public/session/logout'
     | '/api_/public/webhooks/banking'
     | '/_authenticated/console/apps/'
@@ -1403,6 +1440,7 @@ export interface RootRouteChildren {
   AccountAccountViewRoute: typeof AccountAccountViewRoute
   ApiPaymentStatusRoute: typeof ApiPaymentStatusRoute
   DevEmailsRoute: typeof DevEmailsRoute
+  FIdRoute: typeof FIdRoute
   GiftCodeRoute: typeof GiftCodeRoute
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
   RUsernameRoute: typeof RUsernameRoute
@@ -1424,6 +1462,7 @@ export interface RootRouteChildren {
   ApiPublicBlueskyClientMetadataDotjsonRoute: typeof ApiPublicBlueskyClientMetadataDotjsonRoute
   ApiPublicBlueskyStartRoute: typeof ApiPublicBlueskyStartRoute
   ApiPublicCronCheckDnsRoute: typeof ApiPublicCronCheckDnsRoute
+  ApiPublicCronPurgeSharedFilesRoute: typeof ApiPublicCronPurgeSharedFilesRoute
   ApiPublicCronScanTransfersRoute: typeof ApiPublicCronScanTransfersRoute
   ApiPublicCronSecureshieldBillingRoute: typeof ApiPublicCronSecureshieldBillingRoute
   ApiPublicCronSyncFollowersRoute: typeof ApiPublicCronSyncFollowersRoute
@@ -1433,6 +1472,7 @@ export interface RootRouteChildren {
   ApiPublicOauthTokenRoute: typeof ApiPublicOauthTokenRoute
   ApiPublicOauthUserinfoRoute: typeof ApiPublicOauthUserinfoRoute
   ApiPublicOgHandleRoute: typeof ApiPublicOgHandleRoute
+  ApiPublicQrUploadRoute: typeof ApiPublicQrUploadRoute
   ApiPublicSessionLogoutRoute: typeof ApiPublicSessionLogoutRoute
   ApiPublicWebhooksBankingRoute: typeof ApiPublicWebhooksBankingRoute
   ApiPublicBookingsIdActionRoute: typeof ApiPublicBookingsIdActionRoute
@@ -1790,6 +1830,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevEmailsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/f/$id': {
+      id: '/f/$id'
+      path: '/f/$id'
+      fullPath: '/f/$id'
+      preLoaderRoute: typeof FIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/gift_/$code': {
       id: '/gift_/$code'
       path: '/gift/$code'
@@ -2084,6 +2131,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronCheckDnsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api_/public/cron/purge-shared-files': {
+      id: '/api_/public/cron/purge-shared-files'
+      path: '/api/public/cron/purge-shared-files'
+      fullPath: '/api/public/cron/purge-shared-files'
+      preLoaderRoute: typeof ApiPublicCronPurgeSharedFilesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api_/public/cron/scan-transfers': {
       id: '/api_/public/cron/scan-transfers'
       path: '/api/public/cron/scan-transfers'
@@ -2145,6 +2199,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/og/$handle'
       fullPath: '/api/public/og/$handle'
       preLoaderRoute: typeof ApiPublicOgHandleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api_/public/qr/upload': {
+      id: '/api_/public/qr/upload'
+      path: '/api/public/qr/upload'
+      fullPath: '/api/public/qr/upload'
+      preLoaderRoute: typeof ApiPublicQrUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api_/public/session/logout': {
@@ -2438,6 +2499,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountAccountViewRoute: AccountAccountViewRoute,
   ApiPaymentStatusRoute: ApiPaymentStatusRoute,
   DevEmailsRoute: DevEmailsRoute,
+  FIdRoute: FIdRoute,
   GiftCodeRoute: GiftCodeRoute,
   OauthAuthorizeRoute: OauthAuthorizeRoute,
   RUsernameRoute: RUsernameRoute,
@@ -2460,6 +2522,7 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicBlueskyClientMetadataDotjsonRoute,
   ApiPublicBlueskyStartRoute: ApiPublicBlueskyStartRoute,
   ApiPublicCronCheckDnsRoute: ApiPublicCronCheckDnsRoute,
+  ApiPublicCronPurgeSharedFilesRoute: ApiPublicCronPurgeSharedFilesRoute,
   ApiPublicCronScanTransfersRoute: ApiPublicCronScanTransfersRoute,
   ApiPublicCronSecureshieldBillingRoute: ApiPublicCronSecureshieldBillingRoute,
   ApiPublicCronSyncFollowersRoute: ApiPublicCronSyncFollowersRoute,
@@ -2469,6 +2532,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicOauthTokenRoute: ApiPublicOauthTokenRoute,
   ApiPublicOauthUserinfoRoute: ApiPublicOauthUserinfoRoute,
   ApiPublicOgHandleRoute: ApiPublicOgHandleRoute,
+  ApiPublicQrUploadRoute: ApiPublicQrUploadRoute,
   ApiPublicSessionLogoutRoute: ApiPublicSessionLogoutRoute,
   ApiPublicWebhooksBankingRoute: ApiPublicWebhooksBankingRoute,
   ApiPublicBookingsIdActionRoute: ApiPublicBookingsIdActionRoute,

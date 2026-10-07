@@ -526,7 +526,7 @@
   "menu.adminContact.hint": "Berichten uit het contactformulier",
   "menu.adminPayments.hint": "Bankreferenties & CSV-export",
   "menu.adminPortal.hint": "Moderatie & verificaties",
-  "menu.api.hint": "Developer hub",
+  "menu.api.hint": "Manage apps, API keys & infrastructure",
   "menu.batch.hint": "Massa QR-generatie",
   "menu.docs.hint": "AGPLv3 & protocol",
   "menu.domains.hint": "DNS & CNAME configuratie",
