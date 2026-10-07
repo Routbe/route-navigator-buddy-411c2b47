@@ -20,7 +20,7 @@
 - Bluesky/Mastodon accounts without a provider-verified email are created or linked only after a hashed 6-digit email code (`fediverse-otp.server.ts`, `db/46`). Why: typed emails alone allow account takeover.
 - Birthdates live in the separate `user_birthdates` table (`db/48`) and are written only via `saveMyBirthdate`; verification requests return `birthdate_required` until present. Why: keeps legal data out of profile mass-assignment paths.
 
-- Every environment variable name is documented in `ENVIRONMENT.md` (+ `.env.example`); login provider env lookups go through `envAny()` aliases in `better-auth.server.ts`. Why: one findable list for deployers on Vercel.
+- Every environment variable name is documented in `ENVIRONMENT.md` (+ `.env.example`); login provider env lookups go through `envAny()` aliases in `better-auth.server.ts` (incl. `<PROVIDER>_OAUTH_CLIENT_*`), and the auth secret resolves via `resolveAuthSecret()` with a derived fallback so a missing variable never breaks every sign-in. Why: one findable list for deployers on Vercel.
 - The sign-in screen treats a failed provider-status check as unknown (buttons still try), never as "all inactive". Why: a flaky status call must not disable working logins.
 
 - Files live in Scaleway Object Storage via `src/lib/storage/s3.server.ts` (client bucket = member data under `users/<uid>/`, internal bucket = ROUT assets, admin-only); Neon stores only metadata. Why: keeps blobs out of the database and separates customer data from platform assets.
