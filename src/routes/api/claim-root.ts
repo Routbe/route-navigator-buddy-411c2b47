@@ -68,7 +68,10 @@ export const Route = createFileRoute("/api/claim-root")({
         if (!parsed.success) {
           return Response.json({ error: "Ongeldige invoer" }, { status: 400 });
         }
-        const { userId, handle, email, userName } = parsed.data;
+        const { userId, handle, userName } = parsed.data;
+        // Always mail the signed-in account's own address, never a typed one.
+        const email = (session as { email?: string | null }).email ?? "";
+        if (!email) return Response.json({ error: "Geen e-mailadres op dit account" }, { status: 400 });
 
         // Geen impersonatie: het sessie-ID moet exact matchen.
         if (session.id !== userId) {

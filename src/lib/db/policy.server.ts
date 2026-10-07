@@ -40,6 +40,39 @@ const TABLES: Record<string, Access> = {
   qr_scans: { ops: ["select", "delete"], owner: "__via_tracked_qr__" },
 };
 
+/**
+ * Columns a non-admin member may never write from the browser (paid status,
+ * verification, moderation, billing, admin flags…). Stripped from every
+ * insert/update/upsert before SQL is built.
+ */
+const PROTECTED_COLUMNS: Record<string, string[]> = {
+  profiles: [
+    "id", "email", "created_at", "tier", "status", "verified", "verified_at", "verified_legal_name",
+    "is_suspended", "is_banned", "is_early_believer", "is_paid", "subdomain_enabled", "custom_domain",
+    "bluesky_did", "forwarding_email", "forwarding_email_token", "forwarding_email_token_expires_at",
+    "forwarding_email_verified", "handle_grant", "payment_method", "moderated_at", "moderated_by",
+    "moderation_reason", "alias_status", "alias_sync_status", "alias_sync_attempts", "alias_sync_error",
+    "alias_synced_at", "referred_by", "referral_count", "is_admin", "subdomain_alias", "subdomain_tier",
+    "root_subdomain_status", "legal_first_name", "legal_last_name", "invited_count", "verified_invites",
+    "stripe_account_id", "stripe_account_status", "stripe_charges_enabled", "stripe_payouts_enabled",
+    "total_reach_count", "reach_last_synced_at", "is_business", "business_name", "business_vat", "is_influencer",
+  ],
+  custom_domains: ["status", "verification_token", "verified_at", "last_checked_at"],
+  tracked_qrs: ["dashboard_token"],
+  notifications: ["user_id", "kind", "title", "body", "locale", "severity", "details", "created_at"],
+};
+
+function stripProtected(descriptor: QueryDescriptor): QueryDescriptor {
+  const blocked = PROTECTED_COLUMNS[descriptor.table];
+  if (!blocked || descriptor.values == null) return descriptor;
+  const clean = (row: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(row ?? {}).filter(([k]) => !blocked.includes(k)));
+  const values = Array.isArray(descriptor.values)
+    ? descriptor.values.map((r) => clean(r as Record<string, unknown>))
+    : clean(descriptor.values as Record<string, unknown>);
+  return { ...descriptor, values: values as QueryDescriptor["values"] };
+}
+
 /** Functions the browser may call, and whether they need a session. */
 const FUNCTIONS: Record<string, { auth: boolean }> = {
   delete_account: { auth: true },
@@ -112,8 +145,9 @@ export async function authorizeQuery(
     return { ok: true, descriptor };
   }
 
+  const writable = descriptor.action === "select" || descriptor.action === "delete" ? descriptor : stripProtected(descriptor);
   const scoped: QueryDescriptor = {
-    ...descriptor,
+    ...writable,
     filters: [
       ...descriptor.filters.filter((f) => !(f.column === owner)),
       { op: "eq", column: owner, value: userId },
@@ -121,7 +155,7 @@ export async function authorizeQuery(
   };
   if (scoped.action === "insert" || scoped.action === "upsert") {
     const rows = Array.isArray(scoped.values) ? scoped.values : [scoped.values ?? {}];
-    scoped.values = rows.map((row) => ({ ...row, [owner]: userId }));
+    scoped.values = rows.map((row) => ({ ...(row as Record<string, unknown>), [owner]: userId })) as QueryDescriptor["values"];
     scoped.filters = descriptor.filters;
   }
   return { ok: true, descriptor: scoped };

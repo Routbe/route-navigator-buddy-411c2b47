@@ -24,6 +24,19 @@ export const testAtprotoDid = createServerFn({ method: "POST" })
     const { assertBlueskyAccess } = await import("./entitlement.server");
     await assertBlueskyAccess(context.userId); // deep-link / direct-RPC protection
     const host = data.handle.includes(".") ? data.handle : `${data.handle}.rout.be`;
+    // Only ROUT subdomains or the caller's own verified custom domains.
+    const { APP_DOMAINS } = await import("@/lib/app-domains");
+    const ownDomain = APP_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
+    if (!ownDomain) {
+      const { sql } = await import("@/lib/neon");
+      const rows = (await sql`
+        select 1 from public.custom_domains
+         where user_id = ${context.userId} and lower(domain) = ${host} and verified_at is not null limit 1
+      `) as unknown[];
+      if (rows.length === 0) {
+        return { url: `https://${host}`, ok: false, status: 0, body: "Domain is not one of your verified domains." };
+      }
+    }
     const url = `https://${host}/.well-known/atproto-did`;
     try {
       const res = await fetch(url, { headers: { accept: "text/plain" } });
