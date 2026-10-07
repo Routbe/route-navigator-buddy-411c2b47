@@ -36,6 +36,11 @@ export const signinGuardRecord = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<GuardResult> => {
     if (data.success) {
+      // Only a real signed-in session may clear a lock; otherwise anyone could
+      // reset someone else's brute-force counter.
+      const { currentUser } = await import("@/lib/auth/session.server");
+      const user = await currentUser().catch(() => null);
+      if (!user) return { locked: false, retryAfter: 0 };
       await sql`delete from public.signin_throttle where identity_hash = ${data.identityHash}`;
       return { locked: false, retryAfter: 0 };
     }

@@ -223,8 +223,8 @@ export async function deliverGiftCard(row: Row): Promise<void> {
     await sendMail({
       to: recipientEmail,
       subject: `Je kreeg een ROUT-cadeaubon van ${euro(amount)}`,
-      html: `<p>${str(row, "purchaser_name") ?? "Iemand"} stuurde je een ROUT-cadeaubon van ${euro(amount)}.</p>
-        ${str(row, "message") ? `<blockquote>${str(row, "message")}</blockquote>` : ""}
+      html: `<p>${escapeHtml(str(row, "purchaser_name") ?? "Iemand")} stuurde je een ROUT-cadeaubon van ${euro(amount)}.</p>
+        ${str(row, "message") ? `<blockquote>${escapeHtml(str(row, "message") ?? "")}</blockquote>` : ""}
         <p>Code: <strong>${code}</strong></p>
         <p>Bekijk je bon in 3D: <a href="${viewUrl}">${viewUrl}</a></p>
         <p>De PDF zit in bijlage — vul de code in bij het afrekenen.</p>`,
@@ -283,4 +283,9 @@ export async function fetchMyGiftCards(userId: string): Promise<PublicGiftCard[]
      limit 50
   `) as Row[];
   return rows.map((row) => toPublic(row, Number(row["redeemed_count"] ?? 0) > 0));
+}
+
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
