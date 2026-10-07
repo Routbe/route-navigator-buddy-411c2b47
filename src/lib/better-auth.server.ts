@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins/magic-link";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
@@ -27,19 +28,33 @@ function env(name: string): string | undefined {
 
 /** Alternative names people commonly use on Vercel (Auth.js style). */
 const ALIASES: Record<string, string[]> = {
-  GOOGLE_CLIENT_ID: ["AUTH_GOOGLE_ID", "GOOGLE_ID"],
-  GOOGLE_CLIENT_SECRET: ["AUTH_GOOGLE_SECRET", "GOOGLE_SECRET"],
-  GITHUB_CLIENT_ID: ["AUTH_GITHUB_ID", "GITHUB_ID"],
-  GITHUB_CLIENT_SECRET: ["AUTH_GITHUB_SECRET", "GITHUB_SECRET"],
-  GITLAB_CLIENT_ID: ["AUTH_GITLAB_ID", "GITLAB_ID"],
-  GITLAB_CLIENT_SECRET: ["AUTH_GITLAB_SECRET", "GITLAB_SECRET"],
-  APPLE_CLIENT_ID: ["AUTH_APPLE_ID", "APPLE_ID"],
-  APPLE_CLIENT_SECRET: ["AUTH_APPLE_SECRET", "APPLE_SECRET"],
+  GOOGLE_CLIENT_ID: ["GOOGLE_OAUTH_CLIENT_ID", "AUTH_GOOGLE_ID", "GOOGLE_ID"],
+  GOOGLE_CLIENT_SECRET: ["GOOGLE_OAUTH_CLIENT_SECRET", "AUTH_GOOGLE_SECRET", "GOOGLE_SECRET"],
+  GITHUB_CLIENT_ID: ["GITHUB_OAUTH_CLIENT_ID", "AUTH_GITHUB_ID", "GITHUB_ID"],
+  GITHUB_CLIENT_SECRET: ["GITHUB_OAUTH_CLIENT_SECRET", "AUTH_GITHUB_SECRET", "GITHUB_SECRET"],
+  GITLAB_CLIENT_ID: ["GITLAB_OAUTH_CLIENT_ID", "AUTH_GITLAB_ID", "GITLAB_ID"],
+  GITLAB_CLIENT_SECRET: ["GITLAB_OAUTH_CLIENT_SECRET", "AUTH_GITLAB_SECRET", "GITLAB_SECRET"],
+  APPLE_CLIENT_ID: ["APPLE_OAUTH_CLIENT_ID", "AUTH_APPLE_ID", "APPLE_ID"],
+  APPLE_CLIENT_SECRET: ["APPLE_OAUTH_CLIENT_SECRET", "AUTH_APPLE_SECRET", "APPLE_SECRET"],
   BETTER_AUTH_SECRET: ["AUTH_SECRET"],
 };
 
 function envAny(name: string): string | undefined {
   return env(name) ?? (ALIASES[name] ?? []).map(env).find(Boolean);
+}
+
+/**
+ * Better Auth signing secret. Prefers BETTER_AUTH_SECRET/AUTH_SECRET; otherwise
+ * derives a stable one from SESSION_SECRET / OAUTH_STATE_SECRET / DATABASE_URL so
+ * a missing variable no longer breaks every sign-in (logged as a warning).
+ */
+export function resolveAuthSecret(): { secret: string; derived: boolean } | null {
+  const direct = envAny("BETTER_AUTH_SECRET");
+  if (direct && direct.length >= 32) return { secret: direct, derived: false };
+  const seed = env("SESSION_SECRET") ?? env("OAUTH_STATE_SECRET") ?? env("DATABASE_URL");
+  if (!seed) return null;
+  const secret = createHash("sha256").update(`rout-better-auth:${seed}`).digest("hex");
+  return { secret, derived: true };
 }
 
 function pair(id: string, secret: string) {
@@ -70,8 +85,10 @@ function baseUrlFor(request?: Request): string {
 export function createRoutAuth(request?: Request) {
   const connectionString = env("DATABASE_URL");
   if (!connectionString) throw new Error("DATABASE_URL ontbreekt.");
-  const secret = envAny("BETTER_AUTH_SECRET");
-  if (!secret || secret.length < 32) throw new Error("BETTER_AUTH_SECRET ontbreekt.");
+  const resolved = resolveAuthSecret();
+  if (!resolved) throw new Error("BETTER_AUTH_SECRET ontbreekt.");
+  if (resolved.derived) console.warn("[auth] BETTER_AUTH_SECRET missing or <32 chars; using derived fallback. Set it on Vercel.");
+  const secret = resolved.secret;
 
   const socialProviders: Record<string, unknown> = {};
   const google = pair("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET");
@@ -198,10 +215,10 @@ const PROVIDER_KEYS: Record<string, string[]> = {
 /** Diagnostic report — names only, never values. */
 export function authDiagnostics(request?: Request) {
   const base = baseUrlFor(request);
-  const secret = envAny("BETTER_AUTH_SECRET");
+  const resolved = resolveAuthSecret();
   const core = {
     DATABASE_URL: Boolean(env("DATABASE_URL")),
-    BETTER_AUTH_SECRET: Boolean(secret && secret.length >= 32),
+    BETTER_AUTH_SECRET: Boolean(resolved),
     BETTER_AUTH_URL: Boolean(env("BETTER_AUTH_URL") ?? env("NEXT_PUBLIC_APP_URL")),
   };
   const providers = Object.entries(PROVIDER_KEYS).map(([id, keys]) => {
@@ -214,5 +231,5 @@ export function authDiagnostics(request?: Request) {
       callbackUrl: `${base}/api/auth/${generic ? "oauth2/callback" : "callback"}/${id}`,
     };
   });
-  return { baseUrl: base, core, coreReady: Object.values(core).every(Boolean), providers };
+  return { baseUrl: base, secretDerived: resolved?.derived ?? false, core, coreReady: Object.values(core).every(Boolean), providers };
 }

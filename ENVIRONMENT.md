@@ -22,7 +22,7 @@
 
 | Provider | Keys | Callback-URL om in te vullen bij de provider |
 |---|---|---|
-| Google | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | `https://rout.be/api/auth/callback/google` |
+| Google | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (also accepted: `GOOGLE_OAUTH_CLIENT_ID/SECRET`, `AUTH_GOOGLE_ID/SECRET`) | `https://rout.be/api/auth/callback/google` |
 | GitHub | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | `https://rout.be/api/auth/callback/github` |
 | GitLab | `GITLAB_CLIENT_ID`, `GITLAB_CLIENT_SECRET`, optioneel `GITLAB_ISSUER` | `https://rout.be/api/auth/callback/gitlab` |
 | Apple | `APPLE_CLIENT_ID`, `APPLE_CLIENT_SECRET`, optioneel `APPLE_APP_BUNDLE_IDENTIFIER` | `https://rout.be/api/auth/callback/apple` |
@@ -93,3 +93,11 @@ Alle variabelen voor die rol beginnen met `ROUT_PROVIDER_` en staan los van bove
 - **"Deze inlogoptie is nog niet actief"** → de server ziet de twee sleutels van die provider niet. Controleer de exacte naam (hoofdletters!), of de variabele aan staat voor Production, en deploy opnieuw.
 - **`redirect_uri_mismatch`** → de callback-URL in Google/GitHub moet exact overeenkomen met de tabel hierboven.
 - **Fout "BETTER_AUTH_SECRET ontbreekt"** → korter dan 32 tekens of niet ingesteld.
+
+
+## Login troubleshooting ("Authenticatie mislukt")
+- Set `BETTER_AUTH_SECRET` (32+ random chars). Without it a fallback is derived from `SESSION_SECRET`/`OAUTH_STATE_SECRET`/`DATABASE_URL`, but changing those then logs everyone out.
+- Set `BETTER_AUTH_URL` to the exact live domain (e.g. `https://rout.be`).
+- Register `https://<domain>/api/auth/callback/<provider>` at Google/GitHub/GitLab/Apple (old `/api/public/auth/...` URLs no longer work).
+- Provider key aliases: `<PROVIDER>_OAUTH_CLIENT_ID/SECRET`, `AUTH_<PROVIDER>_ID/SECRET`, `<PROVIDER>_ID/SECRET`.
+- Check `/api/public/auth/providers?diagnose=1` for missing key names (never values) and callback URLs.
