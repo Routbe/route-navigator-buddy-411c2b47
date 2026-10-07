@@ -321,7 +321,7 @@ export const decideAuthorizeRequest = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }): Promise<{ redirectTo: string } | { error: string }> => {
     const checked = await checkRequest(data);
-    if ("error" in checked) return { error: checked.error };
+    if ("error" in checked) return { error: checked.error ?? "Ongeldige aanvraag." };
     const { client, scopes, stepUp } = checked;
     const { issueAuthorizationCode, rememberConsent, userMayUseClient, consumeVerifiedStepUp } =
       await import("./provider.server");
@@ -370,7 +370,7 @@ export const silentAuthorize = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => authorizeSchema.parse(data))
   .handler(async ({ data, context }): Promise<{ redirectTo: string } | { error: string }> => {
     const checked = await checkRequest(data);
-    if ("error" in checked) return { error: checked.error };
+    if ("error" in checked) return { error: checked.error ?? "Ongeldige aanvraag." };
     const { client, scopes, stepUp } = checked;
     const fail = (error: string, description: string) => ({
       redirectTo: redirectWith(data.redirectUri, data.state, { error, error_description: description }),
