@@ -32,7 +32,25 @@ export type OAuthClient = {
   flowPreference: "seamless" | "strict";
   /** Mag de app (met toestemming van de gebruiker) publieke activiteit ontvangen? */
   richIdentityEnabled: boolean;
+  /** `testing` = enkel eigenaar + testgebruikers; `production` = iedereen. */
+  publishingStatus: PublishingStatus;
+  supportEmail: string | null;
+  legalOwner: string | null;
+  dpoEmail: string | null;
+  /** PKCE S256 verplicht. Uitzetten kan enkel voor apps met een clientsecret. */
+  requirePkce: boolean;
+  /** Levensduur van access- en id-tokens in seconden. */
+  accessTokenTtl: number;
+  /** Lege lijst = alle IP's mogen het token-endpoint aanspreken. */
+  allowedIps: string[];
+  /** Stille herkenning via `prompt=none`. */
+  accountDiscoveryEnabled: boolean;
 };
+
+export type PublishingStatus = "testing" | "production";
+export const MAX_TEST_USERS = 10;
+export const TOKEN_TTL_MIN = 300;
+export const TOKEN_TTL_MAX = 86400;
 
 export class OAuthError extends Error {
   readonly code: string;
@@ -146,6 +164,32 @@ export async function ensureTables(): Promise<void> {
     consumed_at timestamptz,
     created_at timestamptz not null default now()
   )`;
+  // Migratie 50 — Developer Console (publicatie, contact, beveiliging).
+  await sql`alter table public.oauth_clients add column if not exists publishing_status text not null default 'testing'`;
+  await sql`alter table public.oauth_clients add column if not exists support_email text`;
+  await sql`alter table public.oauth_clients add column if not exists legal_owner text`;
+  await sql`alter table public.oauth_clients add column if not exists dpo_email text`;
+  await sql`alter table public.oauth_clients add column if not exists require_pkce boolean not null default true`;
+  await sql`alter table public.oauth_clients add column if not exists access_token_ttl integer not null default 3600`;
+  await sql`alter table public.oauth_clients add column if not exists allowed_ips text[] not null default '{}'`;
+  await sql`alter table public.oauth_clients add column if not exists account_discovery_enabled boolean not null default false`;
+  await sql`create table if not exists public.oauth_client_test_users (
+    id uuid primary key default gen_random_uuid(),
+    client_id text not null,
+    identifier text not null,
+    created_at timestamptz not null default now(),
+    unique (client_id, identifier)
+  )`;
+  await sql`create table if not exists public.oauth_client_verification_requests (
+    id uuid primary key default gen_random_uuid(),
+    client_id text not null,
+    requested_by uuid not null,
+    status text not null default 'pending',
+    note text,
+    reviewed_by uuid,
+    reviewed_at timestamptz,
+    created_at timestamptz not null default now()
+  )`;
   tablesReady = true;
 }
 
@@ -167,6 +211,14 @@ function toClient(row: Row): OAuthClient {
     createdAt: new Date(row["created_at"] as string).toISOString(),
     flowPreference: row["flow_preference"] === "strict" ? "strict" : "seamless",
     richIdentityEnabled: Boolean(row["rich_identity_enabled"]),
+    publishingStatus: row["publishing_status"] === "production" ? "production" : "testing",
+    supportEmail: (row["support_email"] as string | null) ?? null,
+    legalOwner: (row["legal_owner"] as string | null) ?? null,
+    dpoEmail: (row["dpo_email"] as string | null) ?? null,
+    requirePkce: row["require_pkce"] === undefined ? true : Boolean(row["require_pkce"]),
+    accessTokenTtl: Number(row["access_token_ttl"] ?? ID_TOKEN_TTL_S) || ID_TOKEN_TTL_S,
+    allowedIps: (row["allowed_ips"] as string[] | null) ?? [],
+    accountDiscoveryEnabled: Boolean(row["account_discovery_enabled"]),
   };
 }
 
@@ -252,6 +304,212 @@ export async function updateClient(
     where id = ${id} and owner_user_id = ${ownerUserId} returning *`) as Row[];
   if (!rows[0]) throw new OAuthError("not_found", "Deze app bestaat niet (meer).");
   return toClient(rows[0]);
+}
+
+/** Console-instellingen (db/50). Enkel meegegeven velden veranderen. */
+export type ClientSettings = Partial<{
+  publishingStatus: PublishingStatus;
+  supportEmail: string | null;
+  legalOwner: string | null;
+  dpoEmail: string | null;
+  requirePkce: boolean;
+  accessTokenTtl: number;
+  allowedIps: string[];
+  accountDiscoveryEnabled: boolean;
+}>;
+
+export async function updateClientSettings(
+  ownerUserId: string,
+  id: string,
+  s: ClientSettings,
+): Promise<OAuthClient> {
+  await ensureTables();
+  const current = (await sql`select * from public.oauth_clients
+    where id = ${id} and owner_user_id = ${ownerUserId} limit 1`) as Row[];
+  if (!current[0]) throw new OAuthError("not_found", "Deze app bestaat niet (meer).");
+  const c = toClient(current[0]);
+  const next = {
+    publishingStatus: s.publishingStatus ?? c.publishingStatus,
+    supportEmail: s.supportEmail !== undefined ? s.supportEmail : c.supportEmail,
+    legalOwner: s.legalOwner !== undefined ? s.legalOwner : c.legalOwner,
+    dpoEmail: s.dpoEmail !== undefined ? s.dpoEmail : c.dpoEmail,
+    requirePkce: s.requirePkce ?? c.requirePkce,
+    accessTokenTtl: s.accessTokenTtl ?? c.accessTokenTtl,
+    allowedIps: s.allowedIps ?? c.allowedIps,
+    accountDiscoveryEnabled: s.accountDiscoveryEnabled ?? c.accountDiscoveryEnabled,
+  };
+  if (!next.requirePkce && !c.hasSecret) {
+    throw new OAuthError("invalid_settings", "PKCE uitzetten kan enkel voor apps met een clientsecret.");
+  }
+  if (next.publishingStatus === "production" && (!next.supportEmail || !next.legalOwner)) {
+    throw new OAuthError("invalid_settings", "Vul eerst een support-e-mail en juridische eigenaar in.");
+  }
+  if (next.accessTokenTtl < TOKEN_TTL_MIN || next.accessTokenTtl > TOKEN_TTL_MAX) {
+    throw new OAuthError("invalid_settings", "Tokenlevensduur moet tussen 5 minuten en 24 uur liggen.");
+  }
+  const rows = (await sql`update public.oauth_clients set
+      publishing_status = ${next.publishingStatus}, support_email = ${next.supportEmail},
+      legal_owner = ${next.legalOwner}, dpo_email = ${next.dpoEmail},
+      require_pkce = ${next.requirePkce}, access_token_ttl = ${next.accessTokenTtl},
+      allowed_ips = ${next.allowedIps}, account_discovery_enabled = ${next.accountDiscoveryEnabled},
+      updated_at = now()
+    where id = ${id} and owner_user_id = ${ownerUserId} returning *`) as Row[];
+  return toClient(rows[0]!);
+}
+
+async function ownedClientId(ownerUserId: string, id: string): Promise<string> {
+  const rows = (await sql`select client_id from public.oauth_clients
+    where id = ${id} and owner_user_id = ${ownerUserId} limit 1`) as Row[];
+  if (!rows[0]) throw new OAuthError("not_found", "Deze app bestaat niet (meer).");
+  return String(rows[0]["client_id"]);
+}
+
+/* ------------------------------------------------------- test users ----- */
+
+export async function listTestUsers(ownerUserId: string, id: string): Promise<string[]> {
+  await ensureTables();
+  const clientId = await ownedClientId(ownerUserId, id);
+  const rows = (await sql`select identifier from public.oauth_client_test_users
+    where client_id = ${clientId} order by created_at`) as Row[];
+  return rows.map((r) => String(r["identifier"]));
+}
+
+export async function addTestUser(ownerUserId: string, id: string, identifier: string) {
+  await ensureTables();
+  const clientId = await ownedClientId(ownerUserId, id);
+  const count = (await sql`select count(*)::int as n from public.oauth_client_test_users
+    where client_id = ${clientId}`) as Row[];
+  if (Number(count[0]?.["n"] ?? 0) >= MAX_TEST_USERS) {
+    throw new OAuthError("limit", `Maximaal ${MAX_TEST_USERS} testgebruikers.`);
+  }
+  await sql`insert into public.oauth_client_test_users (client_id, identifier)
+    values (${clientId}, ${identifier.toLowerCase()}) on conflict do nothing`;
+}
+
+export async function removeTestUser(ownerUserId: string, id: string, identifier: string) {
+  await ensureTables();
+  const clientId = await ownedClientId(ownerUserId, id);
+  await sql`delete from public.oauth_client_test_users
+    where client_id = ${clientId} and identifier = ${identifier.toLowerCase()}`;
+}
+
+/** Testing-modus: enkel eigenaar en testgebruikers (e-mail of handle) mogen inloggen. */
+export async function userMayUseClient(
+  client: OAuthClient,
+  user: { id: string; email: string },
+): Promise<boolean> {
+  if (client.publishingStatus === "production") return true;
+  const owner = (await sql`select owner_user_id from public.oauth_clients
+    where client_id = ${client.clientId} limit 1`) as Row[];
+  if (String(owner[0]?.["owner_user_id"]) === user.id) return true;
+  let handles: Row[] = [];
+  try {
+    handles = (await sql`select lower(username) as h from public.profiles
+      where (user_id = ${user.id} or id = ${user.id}) and username is not null`) as Row[];
+  } catch {
+    handles = [];
+  }
+  const ids = [user.email.toLowerCase(), ...handles.map((r) => String(r["h"]))];
+  const hit = (await sql`select 1 from public.oauth_client_test_users
+    where client_id = ${client.clientId} and identifier = any(${ids}) limit 1`) as Row[];
+  return hit.length > 0;
+}
+
+/* ----------------------------------------------------- verification ----- */
+
+export type VerificationStatus = "none" | "pending" | "verified" | "rejected";
+
+export async function latestVerification(ownerUserId: string, id: string) {
+  await ensureTables();
+  const clientId = await ownedClientId(ownerUserId, id);
+  const rows = (await sql`select status, created_at, reviewed_at
+    from public.oauth_client_verification_requests
+    where client_id = ${clientId} order by created_at desc limit 1`) as Row[];
+  const r = rows[0];
+  return {
+    status: (r ? String(r["status"]) : "none") as VerificationStatus,
+    requestedAt: r ? new Date(r["created_at"] as string).toISOString() : null,
+    reviewedAt: r?.["reviewed_at"] ? new Date(r["reviewed_at"] as string).toISOString() : null,
+  };
+}
+
+export async function requestVerification(ownerUserId: string, id: string, note: string) {
+  await ensureTables();
+  const clientId = await ownedClientId(ownerUserId, id);
+  const client = await getClientByClientId(clientId);
+  if (!client?.supportEmail || !client.legalOwner || !client.privacyUrl) {
+    throw new OAuthError("incomplete", "Vul eerst support-e-mail, juridische eigenaar en privacybeleid in.");
+  }
+  const open = (await sql`select 1 from public.oauth_client_verification_requests
+    where client_id = ${clientId} and status in ('pending','verified') limit 1`) as Row[];
+  if (open.length) throw new OAuthError("exists", "Er loopt al een aanvraag of de app is al geverifieerd.");
+  await sql`insert into public.oauth_client_verification_requests (client_id, requested_by, note)
+    values (${clientId}, ${ownerUserId}, ${note || null})`;
+}
+
+/** Enkel aanroepen nadat de beheerdersrol server-side is gecontroleerd. */
+export async function listPendingVerifications() {
+  await ensureTables();
+  const rows = (await sql`select r.id, r.client_id, r.note, r.created_at, c.name, c.homepage_url,
+      c.privacy_url, c.support_email, c.legal_owner
+    from public.oauth_client_verification_requests r
+    join public.oauth_clients c on c.client_id = r.client_id
+    where r.status = 'pending' order by r.created_at`) as Row[];
+  return rows.map((r) => ({
+    id: String(r["id"]),
+    clientId: String(r["client_id"]),
+    name: String(r["name"]),
+    note: (r["note"] as string | null) ?? null,
+    homepageUrl: (r["homepage_url"] as string | null) ?? null,
+    privacyUrl: (r["privacy_url"] as string | null) ?? null,
+    supportEmail: (r["support_email"] as string | null) ?? null,
+    legalOwner: (r["legal_owner"] as string | null) ?? null,
+    createdAt: new Date(r["created_at"] as string).toISOString(),
+  }));
+}
+
+export async function reviewVerification(reviewerId: string, requestId: string, approve: boolean) {
+  await ensureTables();
+  await sql`update public.oauth_client_verification_requests
+    set status = ${approve ? "verified" : "rejected"}, reviewed_by = ${reviewerId}, reviewed_at = now()
+    where id = ${requestId} and status = 'pending'`;
+}
+
+export async function isVerifiedApp(clientId: string): Promise<boolean> {
+  try {
+    const rows = (await sql`select 1 from public.oauth_client_verification_requests
+      where client_id = ${clientId} and status = 'verified' limit 1`) as Row[];
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/* ---------------------------------------------------------- insights ---- */
+
+export async function clientInsights(ownerUserId: string, id: string) {
+  await ensureTables();
+  const clientId = await ownedClientId(ownerUserId, id);
+  const users = (await sql`select count(*)::int as n from public.oauth_consents
+    where client_id = ${clientId}`) as Row[];
+  const codes = (await sql`select
+      count(*)::int as total,
+      count(*) filter (where consumed_at is null and expires_at < now())::int as failed
+    from public.oauth_auth_codes
+    where client_id = ${clientId} and created_at > now() - interval '30 days'`) as Row[];
+  const total = Number(codes[0]?.["total"] ?? 0);
+  const failed = Number(codes[0]?.["failed"] ?? 0);
+  return {
+    activeUsers: Number(users[0]?.["n"] ?? 0),
+    requests30d: total,
+    errorRate: total ? Math.round((failed / total) * 1000) / 10 : 0,
+  };
+}
+
+/** Exacte IP-match tegen de allowlist (leeg = alles toegestaan). */
+export function ipAllowed(client: OAuthClient, ip: string | null): boolean {
+  if (client.allowedIps.length === 0) return true;
+  return Boolean(ip) && client.allowedIps.includes(ip!);
 }
 
 export async function deleteClient(ownerUserId: string, id: string): Promise<void> {
@@ -374,18 +632,24 @@ export async function exchangeAuthorizationCode(input: {
   clientId: string;
   clientSecret?: string | null;
   redirectUri: string;
-  codeVerifier: string;
+  codeVerifier: string | null;
+  clientIp?: string | null;
 }) {
   const client = await getClientByClientId(input.clientId);
   if (!client || client.status !== "active") {
     throw new OAuthError("invalid_client", "Onbekende app.");
   }
+  if (!ipAllowed(client, input.clientIp ?? null)) {
+    throw new OAuthError("invalid_client", "Dit IP-adres mag geen tokens ophalen voor deze app.");
+  }
   const stored = (await sql`select secret_hash from public.oauth_clients
     where client_id = ${input.clientId} limit 1`) as Row[];
   const secretHash = (stored[0]?.["secret_hash"] as string | null) ?? null;
+  let secretVerified = false;
   if (secretHash) {
     const provided = input.clientSecret ? await sha256Base64Url(input.clientSecret) : "";
     if (provided !== secretHash) throw new OAuthError("invalid_client", "Clientsecret klopt niet.");
+    secretVerified = true;
   }
 
   const row = await consumeCode(input.code);
@@ -395,10 +659,18 @@ export async function exchangeAuthorizationCode(input: {
   if (String(row["redirect_uri"]) !== input.redirectUri) {
     throw new OAuthError("invalid_grant", "De redirect-URI komt niet overeen.");
   }
-  const challenge = await sha256Base64Url(input.codeVerifier);
-  if (challenge !== String(row["code_challenge"])) {
-    throw new OAuthError("invalid_grant", "PKCE-controle mislukt.");
+  const storedChallenge = String(row["code_challenge"] ?? "");
+  if (storedChallenge) {
+    // Code werd met PKCE uitgegeven: de verifier is altijd verplicht.
+    if (!input.codeVerifier) throw new OAuthError("invalid_grant", "code_verifier ontbreekt.");
+    if ((await sha256Base64Url(input.codeVerifier)) !== storedChallenge) {
+      throw new OAuthError("invalid_grant", "PKCE-controle mislukt.");
+    }
+  } else if (client.requirePkce || !secretVerified) {
+    // Zonder PKCE enkel voor vertrouwelijke apps die PKCE expliciet uitzetten.
+    throw new OAuthError("invalid_grant", "PKCE is verplicht voor deze app.");
   }
+  const ttl = Math.min(Math.max(client.accessTokenTtl, TOKEN_TTL_MIN), TOKEN_TTL_MAX);
 
   const userId = String(row["user_id"]);
   const scopes = (row["scopes"] as string[] | null) ?? [];
@@ -422,7 +694,7 @@ export async function exchangeAuthorizationCode(input: {
     sub: userId,
     aud: input.clientId,
     iat: now,
-    exp: now + ID_TOKEN_TTL_S,
+    exp: now + ttl,
     ...(row["nonce"] ? { nonce: String(row["nonce"]) } : {}),
     ...(row["acr"] ? { acr: String(row["acr"]) } : {}),
     ...claims,
@@ -433,13 +705,13 @@ export async function exchangeAuthorizationCode(input: {
     aud: input.clientId,
     scope: scopes.join(" "),
     iat: now,
-    exp: now + ID_TOKEN_TTL_S,
+    exp: now + ttl,
   });
   return {
     access_token: accessToken,
     id_token: idToken,
     token_type: "Bearer",
-    expires_in: ID_TOKEN_TTL_S,
+    expires_in: ttl,
     scope: scopes.join(" "),
   };
 }

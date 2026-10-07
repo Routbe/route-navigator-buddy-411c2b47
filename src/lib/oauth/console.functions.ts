@@ -1,30 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireAuth } from "@/lib/auth/middleware";
+import { optionalAuth, requireAuth } from "@/lib/auth/middleware";
 import { needsStepUp, shareRichIdentity, STRICT_ACR } from "./step-up";
+import { clientSchema, settingsSchema, testUserSchema, verificationRequestSchema } from "./console-schemas";
 
 /**
- * Server-functies voor de ROUT Developer Console en het toestemmingsscherm.
+ * Server functions for the ROUT Developer Console and the consent screen.
  *
- * Elke functie controleert zelf de sessie; apps horen altijd bij de gebruiker
- * die ze aanmaakte. Clientsecrets verlaten de server maar één keer: op het
- * moment dat ze gemaakt of geroteerd worden.
+ * Console (developer role): every function checks the session + verified
+ * developer status itself and only touches the caller's own apps. Client
+ * secrets leave the server once: on create or rotate.
+ *
+ * Consent screen (consumer role): separate from the console; uses only the
+ * end user's normal ROUT session.
  */
-
-const urlish = z.string().trim().max(300).nullable().optional();
-
-const clientSchema = z.object({
-  id: z.string().uuid().optional(),
-  name: z.string().trim().min(2).max(120),
-  logoUrl: urlish,
-  homepageUrl: urlish,
-  privacyUrl: urlish,
-  termsUrl: urlish,
-  redirectUris: z.array(z.string().trim().max(300)).max(20),
-  scopes: z.array(z.enum(["openid", "profile", "email", "linked_accounts"])).max(4),
-  flowPreference: z.enum(["seamless", "strict"]).optional(),
-  richIdentityEnabled: z.boolean().optional(),
-});
 
 async function assertVerified(userId: string) {
   const { isVerifiedDeveloper } = await import("./provider.server");
@@ -32,6 +21,19 @@ async function assertVerified(userId: string) {
     throw new Error("De Developer Console is beschikbaar voor geverifieerde leden.");
   }
 }
+
+/** Turns provider OAuthErrors into plain messages for the console UI. */
+async function friendly<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    const { OAuthError } = await import("./provider.server");
+    if (error instanceof OAuthError) throw new Error(error.message);
+    throw error;
+  }
+}
+
+const idSchema = z.object({ id: z.string().uuid() }).strict();
 
 export const consoleAccess = createServerFn({ method: "GET" })
   .middleware([requireAuth])
@@ -65,15 +67,33 @@ export const saveOAuthClient = createServerFn({ method: "POST" })
       ...(data.flowPreference ? { flowPreference: data.flowPreference } : {}),
       ...(data.richIdentityEnabled !== undefined ? { richIdentityEnabled: data.richIdentityEnabled } : {}),
     };
-    if (data.id) {
-      return { client: await updateClient(context.userId, data.id, input), clientSecret: null };
-    }
-    return createClient(context.userId, input);
+    return friendly(async () => {
+      if (data.id) {
+        return { client: await updateClient(context.userId, data.id, input), clientSecret: null };
+      }
+      return createClient(context.userId, input);
+    });
+  });
+
+export const saveOAuthClientSettings = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .inputValidator((data: unknown) => settingsSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertVerified(context.userId);
+    const { updateClientSettings } = await import("./provider.server");
+    const { id, ...rest } = data;
+    const settings = {
+      ...rest,
+      ...(rest.supportEmail !== undefined ? { supportEmail: rest.supportEmail?.toLowerCase() || null } : {}),
+      ...(rest.dpoEmail !== undefined ? { dpoEmail: rest.dpoEmail?.toLowerCase() || null } : {}),
+      ...(rest.legalOwner !== undefined ? { legalOwner: rest.legalOwner || null } : {}),
+    };
+    return friendly(() => updateClientSettings(context.userId, id, settings));
   });
 
 export const deleteOAuthClient = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .inputValidator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
+  .inputValidator((data: unknown) => idSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertVerified(context.userId);
     const { deleteClient } = await import("./provider.server");
@@ -83,14 +103,89 @@ export const deleteOAuthClient = createServerFn({ method: "POST" })
 
 export const rotateOAuthSecret = createServerFn({ method: "POST" })
   .middleware([requireAuth])
-  .inputValidator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
+  .inputValidator((data: unknown) => idSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertVerified(context.userId);
     const { rotateClientSecret } = await import("./provider.server");
-    return { clientSecret: await rotateClientSecret(context.userId, data.id) };
+    return friendly(async () => ({ clientSecret: await rotateClientSecret(context.userId, data.id) }));
   });
 
-/* ------------------------------------------------ toestemmingsscherm ----- */
+export const getOAuthClientInsights = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .inputValidator((data: unknown) => idSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertVerified(context.userId);
+    const { clientInsights, latestVerification } = await import("./provider.server");
+    return friendly(async () => ({
+      ...(await clientInsights(context.userId, data.id)),
+      verification: await latestVerification(context.userId, data.id),
+    }));
+  });
+
+export const listOAuthTestUsers = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .inputValidator((data: unknown) => idSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertVerified(context.userId);
+    const { listTestUsers } = await import("./provider.server");
+    return friendly(() => listTestUsers(context.userId, data.id));
+  });
+
+export const addOAuthTestUser = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .inputValidator((data: unknown) => testUserSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertVerified(context.userId);
+    const { addTestUser } = await import("./provider.server");
+    await friendly(() => addTestUser(context.userId, data.id, data.identifier));
+    return { ok: true };
+  });
+
+export const removeOAuthTestUser = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .inputValidator((data: unknown) => testUserSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertVerified(context.userId);
+    const { removeTestUser } = await import("./provider.server");
+    await friendly(() => removeTestUser(context.userId, data.id, data.identifier));
+    return { ok: true };
+  });
+
+export const requestOAuthVerification = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .inputValidator((data: unknown) => verificationRequestSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertVerified(context.userId);
+    const { requestVerification } = await import("./provider.server");
+    await friendly(() => requestVerification(context.userId, data.id, data.note ?? ""));
+    return { ok: true };
+  });
+
+/* ------------------------------------------------------ admin review ---- */
+
+export const listAppVerificationRequests = createServerFn({ method: "GET" })
+  .middleware([requireAuth])
+  .handler(async ({ context }) => {
+    const { assertAdminRole } = await import("@/lib/admin.server");
+    await assertAdminRole(context.userId);
+    const { listPendingVerifications } = await import("./provider.server");
+    return listPendingVerifications();
+  });
+
+export const reviewAppVerificationRequest = createServerFn({ method: "POST" })
+  .middleware([requireAuth])
+  .inputValidator((data: unknown) =>
+    z.object({ requestId: z.string().uuid(), approve: z.boolean() }).strict().parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { assertAdminRole } = await import("@/lib/admin.server");
+    await assertAdminRole(context.userId);
+    const { reviewVerification } = await import("./provider.server");
+    await reviewVerification(context.userId, data.requestId, data.approve);
+    return { ok: true };
+  });
+
+/* ------------------------------------------------------ consent screen --- */
 
 const authorizeSchema = z.object({
   clientId: z.string().min(4).max(120),
@@ -98,12 +193,15 @@ const authorizeSchema = z.object({
   scope: z.string().max(200).optional(),
   state: z.string().max(300).nullable().optional(),
   nonce: z.string().max(300).nullable().optional(),
-  codeChallenge: z.string().min(20).max(200),
+  /** Empty = no PKCE (only allowed when the app turned PKCE off). */
+  codeChallenge: z.string().max(200),
   codeChallengeMethod: z.string().max(10),
   prompt: z.string().max(60).nullable().optional(),
   maxAge: z.string().max(12).nullable().optional(),
   acrValues: z.string().max(200).nullable().optional(),
+  loginHint: z.string().max(200).nullable().optional(),
 });
+type AuthorizeInput = z.infer<typeof authorizeSchema>;
 
 export type AuthorizePrompt = {
   ok: boolean;
@@ -114,13 +212,14 @@ export type AuthorizePrompt = {
     homepageUrl: string | null;
     privacyUrl: string | null;
     termsUrl: string | null;
+    verified?: boolean;
   };
   scopes?: string[];
   account?: { email: string; name: string | null; handle: string | null; avatarUrl: string | null };
   alreadyGranted?: boolean;
-  /** Strict flow / prompt=login / max_age / acr_values → extra code vereist. */
+  /** Strict flow / prompt=login / max_age / acr_values → extra code required. */
   requiresStepUp?: boolean;
-  /** App vraagt (optioneel) publieke activiteit. */
+  /** App asks (optionally) for public activity. */
   richIdentity?: boolean;
 };
 
@@ -138,31 +237,61 @@ async function profileOf(userId: string) {
   }
 }
 
+/**
+ * Shared checks for every authorize step. Fails safe: with an unknown app or
+ * wrong redirect URI we never send the user back to the app.
+ */
+async function checkRequest(data: AuthorizeInput) {
+  const { getClientByClientId, redirectAllowed, SUPPORTED_SCOPES } = await import("./provider.server");
+  const client = await getClientByClientId(data.clientId);
+  if (!client || client.status !== "active") return { error: "Deze app is onbekend bij ROUT." } as const;
+  if (!redirectAllowed(client, data.redirectUri)) {
+    return { error: "Het terugkeeradres van deze app klopt niet." } as const;
+  }
+  const hasPkce = data.codeChallenge.length > 0;
+  if (hasPkce && (data.codeChallengeMethod !== "S256" || data.codeChallenge.length < 43)) {
+    return { error: "Deze app moet PKCE met S256 gebruiken." } as const;
+  }
+  if (!hasPkce && (client.requirePkce || !client.hasSecret)) {
+    return { error: "Deze app moet PKCE (S256) meesturen." } as const;
+  }
+  const requested = (data.scope ?? "openid").split(" ").filter(Boolean);
+  const scopes = requested.filter(
+    (s) => client.scopes.includes(s) && SUPPORTED_SCOPES.includes(s as never),
+  );
+  if (!scopes.includes("openid")) scopes.unshift("openid");
+  const unknown = requested.find((s) => !scopes.includes(s));
+  if (unknown) return { error: `Deze app vraagt een recht dat niet mag: ${unknown}.` } as const;
+  const stepUp = needsStepUp({
+    flowPreference: client.flowPreference,
+    prompt: data.prompt ?? null,
+    maxAge: data.maxAge ?? null,
+    acrValues: data.acrValues ?? null,
+  });
+  return { client, scopes, stepUp } as const;
+}
+
+function redirectWith(redirectUri: string, state: string | null | undefined, params: Record<string, string>) {
+  const target = new URL(redirectUri);
+  for (const [k, v] of Object.entries(params)) target.searchParams.set(k, v);
+  if (state) target.searchParams.set("state", state);
+  return target.toString();
+}
+
 export const describeAuthorizeRequest = createServerFn({ method: "POST" })
   .middleware([requireAuth])
   .inputValidator((data: unknown) => authorizeSchema.parse(data))
   .handler(async ({ data, context }): Promise<AuthorizePrompt> => {
-    const { getClientByClientId, redirectAllowed, hasConsent, SUPPORTED_SCOPES } = await import(
-      "./provider.server"
-    );
-    if (data.codeChallengeMethod !== "S256") {
-      return { ok: false, error: "Deze app moet PKCE met S256 gebruiken." };
+    const checked = await checkRequest(data);
+    if ("error" in checked) return { ok: false, error: checked.error };
+    const { client, scopes, stepUp } = checked;
+    const { hasConsent, userMayUseClient, isVerifiedApp } = await import("./provider.server");
+    if (!(await userMayUseClient(client, { id: context.userId, email: context.user.email }))) {
+      return {
+        ok: false,
+        error: "Deze app is nog in testfase. Enkel uitgenodigde testgebruikers kunnen inloggen.",
+      };
     }
-    const client = await getClientByClientId(data.clientId);
-    if (!client || client.status !== "active") {
-      return { ok: false, error: "Deze app is onbekend bij ROUT." };
-    }
-    if (!redirectAllowed(client, data.redirectUri)) {
-      return { ok: false, error: "Het terugkeeradres van deze app klopt niet." };
-    }
-    const requested = (data.scope ?? "openid").split(" ").filter(Boolean);
-    const scopes = requested.filter(
-      (s) => client.scopes.includes(s) && SUPPORTED_SCOPES.includes(s as never),
-    );
-    if (!scopes.includes("openid")) scopes.unshift("openid");
-    const unknown = requested.find((s) => !scopes.includes(s));
-    if (unknown) return { ok: false, error: `Deze app vraagt een recht dat niet mag: ${unknown}.` };
-
     return {
       ok: true,
       app: {
@@ -171,6 +300,7 @@ export const describeAuthorizeRequest = createServerFn({ method: "POST" })
         homepageUrl: client.homepageUrl,
         privacyUrl: client.privacyUrl,
         termsUrl: client.termsUrl,
+        verified: await isVerifiedApp(client.clientId),
       },
       scopes,
       account: {
@@ -179,12 +309,7 @@ export const describeAuthorizeRequest = createServerFn({ method: "POST" })
         ...(await profileOf(context.userId)),
       },
       alreadyGranted: await hasConsent(context.userId, client.clientId, scopes),
-      requiresStepUp: needsStepUp({
-        flowPreference: client.flowPreference,
-        prompt: data.prompt ?? null,
-        maxAge: data.maxAge ?? null,
-        acrValues: data.acrValues ?? null,
-      }),
+      requiresStepUp: stepUp,
       richIdentity: client.richIdentityEnabled,
     };
   });
@@ -195,40 +320,30 @@ export const decideAuthorizeRequest = createServerFn({ method: "POST" })
     authorizeSchema.extend({ allow: z.boolean(), richIdentityOptIn: z.boolean().optional() }).parse(data),
   )
   .handler(async ({ data, context }): Promise<{ redirectTo: string } | { error: string }> => {
-    const { getClientByClientId, redirectAllowed, issueAuthorizationCode, rememberConsent } =
+    const checked = await checkRequest(data);
+    if ("error" in checked) return { error: checked.error ?? "Ongeldige aanvraag." };
+    const { client, scopes, stepUp } = checked;
+    const { issueAuthorizationCode, rememberConsent, userMayUseClient, consumeVerifiedStepUp } =
       await import("./provider.server");
-    const client = await getClientByClientId(data.clientId);
-    if (!client || client.status !== "active") return { error: "Deze app is onbekend bij ROUT." };
-    if (!redirectAllowed(client, data.redirectUri)) {
-      return { error: "Het terugkeeradres van deze app klopt niet." };
-    }
-    if (data.codeChallengeMethod !== "S256") return { error: "PKCE S256 is verplicht." };
-
-    const target = new URL(data.redirectUri);
-    if (data.state) target.searchParams.set("state", data.state);
 
     if (!data.allow) {
-      target.searchParams.set("error", "access_denied");
-      target.searchParams.set("error_description", "De gebruiker gaf geen toestemming.");
-      return { redirectTo: target.toString() };
+      return {
+        redirectTo: redirectWith(data.redirectUri, data.state, {
+          error: "access_denied",
+          error_description: "De gebruiker gaf geen toestemming.",
+        }),
+      };
     }
-
-    const scopes = (data.scope ?? "openid")
-      .split(" ")
-      .filter((s) => s && client.scopes.includes(s));
-    if (!scopes.includes("openid")) scopes.unshift("openid");
-
-    const stepUp = needsStepUp({
-      flowPreference: client.flowPreference,
-      prompt: data.prompt ?? null,
-      maxAge: data.maxAge ?? null,
-      acrValues: data.acrValues ?? null,
-    });
-    if (stepUp) {
-      const { consumeVerifiedStepUp } = await import("./provider.server");
-      if (!(await consumeVerifiedStepUp(context.userId, client.clientId))) {
-        return { error: "Bevestig eerst de verificatiecode." };
-      }
+    if (!(await userMayUseClient(client, { id: context.userId, email: context.user.email }))) {
+      return {
+        redirectTo: redirectWith(data.redirectUri, data.state, {
+          error: "access_denied",
+          error_description: "Deze app is in testfase en dit account is geen testgebruiker.",
+        }),
+      };
+    }
+    if (stepUp && !(await consumeVerifiedStepUp(context.userId, client.clientId))) {
+      return { error: "Bevestig eerst de verificatiecode." };
     }
 
     const code = await issueAuthorizationCode({
@@ -242,8 +357,55 @@ export const decideAuthorizeRequest = createServerFn({ method: "POST" })
       nonce: data.nonce ?? null,
     });
     await rememberConsent(context.userId, client.clientId, scopes);
-    target.searchParams.set("code", code);
-    return { redirectTo: target.toString() };
+    return { redirectTo: redirectWith(data.redirectUri, data.state, { code }) };
+  });
+
+/**
+ * `prompt=none` — Account Auto-Discovery. Never shows a screen: either a code
+ * (existing session + existing consent) or an OIDC error back to the app.
+ * Works without a session, hence `optionalAuth`.
+ */
+export const silentAuthorize = createServerFn({ method: "POST" })
+  .middleware([optionalAuth])
+  .inputValidator((data: unknown) => authorizeSchema.parse(data))
+  .handler(async ({ data, context }): Promise<{ redirectTo: string } | { error: string }> => {
+    const checked = await checkRequest(data);
+    if ("error" in checked) return { error: checked.error ?? "Ongeldige aanvraag." };
+    const { client, scopes, stepUp } = checked;
+    const fail = (error: string, description: string) => ({
+      redirectTo: redirectWith(data.redirectUri, data.state, { error, error_description: description }),
+    });
+
+    if (!client.accountDiscoveryEnabled) {
+      return fail("interaction_required", "Account Auto-Discovery staat uit voor deze app.");
+    }
+    if (!context.user || !context.userId) return fail("login_required", "Geen actieve ROUT-sessie.");
+    const hint = data.loginHint?.trim().toLowerCase();
+    if (hint) {
+      const { handle } = await profileOf(context.userId);
+      const matches =
+        hint === context.user.email.toLowerCase() || hint.replace(/^@/, "") === handle?.toLowerCase();
+      if (!matches) return fail("login_required", "De actieve sessie hoort bij een ander account.");
+    }
+    const { hasConsent, userMayUseClient, issueAuthorizationCode } = await import("./provider.server");
+    if (!(await userMayUseClient(client, { id: context.userId, email: context.user.email }))) {
+      return fail("access_denied", "Deze app is in testfase en dit account is geen testgebruiker.");
+    }
+    if (stepUp) return fail("interaction_required", "Deze aanvraag vereist een extra verificatiestap.");
+    if (!(await hasConsent(context.userId, client.clientId, scopes))) {
+      return fail("consent_required", "De gebruiker gaf deze app nog geen toestemming.");
+    }
+    const code = await issueAuthorizationCode({
+      acr: null,
+      richIdentity: false,
+      clientId: client.clientId,
+      userId: context.userId,
+      redirectUri: data.redirectUri,
+      scopes,
+      codeChallenge: data.codeChallenge,
+      nonce: data.nonce ?? null,
+    });
+    return { redirectTo: redirectWith(data.redirectUri, data.state, { code }) };
   });
 
 /* ------------------------------------------------------------ step-up ---- */
