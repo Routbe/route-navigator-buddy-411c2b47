@@ -4,15 +4,15 @@ import { parseTourDraft, type TourDraft } from "@/lib/tour-draft";
 
 /**
  * Bewaart het rondleiding-concept op e-mailadres, zodat een magic-link login op
- * een ander toestel alle stappen terugvindt. Alleen schrijven is publiek;
- * teruglezen kan uitsluitend de ingelogde eigenaar van dat adres.
+ * een ander toestel alle stappen terugvindt. Alleen de ingelogde eigenaar
+ * van dat adres kan schrijven en teruglezen.
  */
 export const saveTourDraft = createServerFn({ method: "POST" })
-  .inputValidator((input: { email: string; draft: unknown }) => input)
-  .handler(async ({ data }) => {
-    const email = String(data.email ?? "")
-      .trim()
-      .toLowerCase();
+  .middleware([requireAuth])
+  .inputValidator((input: { draft: unknown }) => input)
+  .handler(async ({ data, context }) => {
+    // Signed-in only: the draft is always stored under the session's own email.
+    const email = (context.user?.email ?? "").trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return { ok: false as const, reason: "invalid_email" };
     }
