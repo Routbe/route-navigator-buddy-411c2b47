@@ -51,7 +51,7 @@ export const Route = createFileRoute("/api_/public/oauth/token")({
           }
         }
 
-        if (!code || !redirectUri || !codeVerifier || !clientId) {
+        if (!code || !redirectUri || !clientId) {
           return fail("invalid_request", "Verplichte velden ontbreken.");
         }
 
@@ -62,7 +62,12 @@ export const Route = createFileRoute("/api_/public/oauth/token")({
             clientId,
             clientSecret,
             redirectUri,
-            codeVerifier,
+            codeVerifier: codeVerifier || null,
+            clientIp:
+              request.headers.get("cf-connecting-ip") ??
+              request.headers.get("x-real-ip") ??
+              request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+              null,
           });
           return Response.json(tokens, {
             headers: { ...cors, "cache-control": "no-store", pragma: "no-cache" },

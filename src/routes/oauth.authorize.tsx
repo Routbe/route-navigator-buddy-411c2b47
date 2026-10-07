@@ -12,6 +12,7 @@ import {
   decideAuthorizeRequest,
   sendStepUpCode,
   verifyStepUp,
+  silentAuthorize,
   type AuthorizePrompt,
 } from "@/lib/oauth/console.functions";
 
@@ -27,6 +28,7 @@ type Search = {
   prompt?: string;
   max_age?: string;
   acr_values?: string;
+  login_hint?: string;
 };
 
 export const Route = createFileRoute("/oauth/authorize")({
@@ -50,6 +52,7 @@ export const Route = createFileRoute("/oauth/authorize")({
         ? String(search["max_age"])
         : undefined,
     acr_values: typeof search["acr_values"] === "string" ? search["acr_values"] : undefined,
+    login_hint: typeof search["login_hint"] === "string" ? search["login_hint"] : undefined,
   }),
   head: () => ({
     meta: [
@@ -99,6 +102,8 @@ function AuthorizePage() {
   const decide = useServerFn(decideAuthorizeRequest);
   const sendCode = useServerFn(sendStepUpCode);
   const verifyCode = useServerFn(verifyStepUp);
+  const silent = useServerFn(silentAuthorize);
+  const isSilent = (search.prompt ?? "").split(" ").includes("none");
   const [prompt, setPrompt] = useState<AuthorizePrompt | null>(null);
   const [busy, setBusy] = useState(false);
   const [richOptIn, setRichOptIn] = useState(false);
@@ -118,22 +123,39 @@ function AuthorizePage() {
     prompt: search.prompt ?? null,
     maxAge: search.max_age ?? null,
     acrValues: search.acr_values ?? null,
+    loginHint: search.login_hint ?? null,
   };
 
   // Niet ingelogd? Eerst aanmelden, daarna terug naar exact dit scherm.
+  // prompt=none: never show a screen — redirect back with a code or an OIDC error.
   useEffect(() => {
-    if (loading || user) return;
+    if (!isSilent || loading) return;
+    if (!payload.clientId || !payload.redirectUri) {
+      setPrompt({ ok: false, error: "Deze aanvraag mist verplichte gegevens." });
+      return;
+    }
+    silent({ data: payload })
+      .then((r) => {
+        if ("redirectTo" in r) window.location.replace(r.redirectTo);
+        else setPrompt({ ok: false, error: r.error });
+      })
+      .catch(() => setPrompt({ ok: false, error: "De aanvraag kon niet gecontroleerd worden." }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSilent, loading]);
+
+  useEffect(() => {
+    if (isSilent || loading || user) return;
     const next = `${window.location.pathname}${window.location.search}`;
     window.location.href = `/auth/sign-in?next=${encodeURIComponent(next)}`;
   }, [loading, user]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || isSilent) return;
     if (search.response_type && search.response_type !== "code") {
       setPrompt({ ok: false, error: "Alleen de veilige code-flow wordt ondersteund." });
       return;
     }
-    if (!payload.clientId || !payload.redirectUri || !payload.codeChallenge) {
+    if (!payload.clientId || !payload.redirectUri) {
       setPrompt({ ok: false, error: "Deze aanvraag mist verplichte gegevens." });
       return;
     }
