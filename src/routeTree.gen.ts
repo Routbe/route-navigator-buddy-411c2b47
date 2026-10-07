@@ -116,8 +116,11 @@ import { Route as ApiPublicQrUploadRouteImport } from './routes/api_.public.qr.u
 import { Route as ApiPublicSessionLogoutRouteImport } from './routes/api_.public.session.logout'
 import { Route as ApiPublicWebhooksBankingRouteImport } from './routes/api_.public.webhooks.banking'
 import { Route as AuthenticatedConsoleAppsAppIdIndexRouteImport } from './routes/_authenticated/console.apps.$appId.index'
+import { Route as AuthenticatedConsoleAppsAppIdAdvancedRouteImport } from './routes/_authenticated/console.apps.$appId.advanced'
 import { Route as AuthenticatedConsoleAppsAppIdBrandingRouteImport } from './routes/_authenticated/console.apps.$appId.branding'
 import { Route as AuthenticatedConsoleAppsAppIdCredentialsRouteImport } from './routes/_authenticated/console.apps.$appId.credentials'
+import { Route as AuthenticatedConsoleAppsAppIdOverviewRouteImport } from './routes/_authenticated/console.apps.$appId.overview'
+import { Route as AuthenticatedConsoleAppsAppIdPublishingRouteImport } from './routes/_authenticated/console.apps.$appId.publishing'
 import { Route as AuthenticatedConsoleAppsAppIdRedirectsRouteImport } from './routes/_authenticated/console.apps.$appId.redirects'
 import { Route as AuthenticatedConsoleAppsAppIdScopesRouteImport } from './routes/_authenticated/console.apps.$appId.scopes'
 import { Route as AuthenticatedConsoleAppsAppIdSecurityRouteImport } from './routes/_authenticated/console.apps.$appId.security'
@@ -683,6 +686,12 @@ const AuthenticatedConsoleAppsAppIdIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedConsoleAppsAppIdRoute,
   } as any)
+const AuthenticatedConsoleAppsAppIdAdvancedRoute =
+  AuthenticatedConsoleAppsAppIdAdvancedRouteImport.update({
+    id: '/advanced',
+    path: '/advanced',
+    getParentRoute: () => AuthenticatedConsoleAppsAppIdRoute,
+  } as any)
 const AuthenticatedConsoleAppsAppIdBrandingRoute =
   AuthenticatedConsoleAppsAppIdBrandingRouteImport.update({
     id: '/branding',
@@ -693,6 +702,18 @@ const AuthenticatedConsoleAppsAppIdCredentialsRoute =
   AuthenticatedConsoleAppsAppIdCredentialsRouteImport.update({
     id: '/credentials',
     path: '/credentials',
+    getParentRoute: () => AuthenticatedConsoleAppsAppIdRoute,
+  } as any)
+const AuthenticatedConsoleAppsAppIdOverviewRoute =
+  AuthenticatedConsoleAppsAppIdOverviewRouteImport.update({
+    id: '/overview',
+    path: '/overview',
+    getParentRoute: () => AuthenticatedConsoleAppsAppIdRoute,
+  } as any)
+const AuthenticatedConsoleAppsAppIdPublishingRoute =
+  AuthenticatedConsoleAppsAppIdPublishingRouteImport.update({
+    id: '/publishing',
+    path: '/publishing',
     getParentRoute: () => AuthenticatedConsoleAppsAppIdRoute,
   } as any)
 const AuthenticatedConsoleAppsAppIdRedirectsRoute =
@@ -826,8 +847,11 @@ export interface FileRoutesByFullPath {
   '/api/public/session/logout': typeof ApiPublicSessionLogoutRoute
   '/api/public/webhooks/banking': typeof ApiPublicWebhooksBankingRoute
   '/console/apps/': typeof AuthenticatedConsoleAppsIndexRoute
+  '/console/apps/$appId/advanced': typeof AuthenticatedConsoleAppsAppIdAdvancedRoute
   '/console/apps/$appId/branding': typeof AuthenticatedConsoleAppsAppIdBrandingRoute
   '/console/apps/$appId/credentials': typeof AuthenticatedConsoleAppsAppIdCredentialsRoute
+  '/console/apps/$appId/overview': typeof AuthenticatedConsoleAppsAppIdOverviewRoute
+  '/console/apps/$appId/publishing': typeof AuthenticatedConsoleAppsAppIdPublishingRoute
   '/console/apps/$appId/redirects': typeof AuthenticatedConsoleAppsAppIdRedirectsRoute
   '/console/apps/$appId/scopes': typeof AuthenticatedConsoleAppsAppIdScopesRoute
   '/console/apps/$appId/security': typeof AuthenticatedConsoleAppsAppIdSecurityRoute
@@ -936,8 +960,11 @@ export interface FileRoutesByTo {
   '/api/public/session/logout': typeof ApiPublicSessionLogoutRoute
   '/api/public/webhooks/banking': typeof ApiPublicWebhooksBankingRoute
   '/console/apps': typeof AuthenticatedConsoleAppsIndexRoute
+  '/console/apps/$appId/advanced': typeof AuthenticatedConsoleAppsAppIdAdvancedRoute
   '/console/apps/$appId/branding': typeof AuthenticatedConsoleAppsAppIdBrandingRoute
   '/console/apps/$appId/credentials': typeof AuthenticatedConsoleAppsAppIdCredentialsRoute
+  '/console/apps/$appId/overview': typeof AuthenticatedConsoleAppsAppIdOverviewRoute
+  '/console/apps/$appId/publishing': typeof AuthenticatedConsoleAppsAppIdPublishingRoute
   '/console/apps/$appId/redirects': typeof AuthenticatedConsoleAppsAppIdRedirectsRoute
   '/console/apps/$appId/scopes': typeof AuthenticatedConsoleAppsAppIdScopesRoute
   '/console/apps/$appId/security': typeof AuthenticatedConsoleAppsAppIdSecurityRoute
@@ -1052,8 +1079,11 @@ export interface FileRoutesById {
   '/api_/public/session/logout': typeof ApiPublicSessionLogoutRoute
   '/api_/public/webhooks/banking': typeof ApiPublicWebhooksBankingRoute
   '/_authenticated/console/apps/': typeof AuthenticatedConsoleAppsIndexRoute
+  '/_authenticated/console/apps/$appId/advanced': typeof AuthenticatedConsoleAppsAppIdAdvancedRoute
   '/_authenticated/console/apps/$appId/branding': typeof AuthenticatedConsoleAppsAppIdBrandingRoute
   '/_authenticated/console/apps/$appId/credentials': typeof AuthenticatedConsoleAppsAppIdCredentialsRoute
+  '/_authenticated/console/apps/$appId/overview': typeof AuthenticatedConsoleAppsAppIdOverviewRoute
+  '/_authenticated/console/apps/$appId/publishing': typeof AuthenticatedConsoleAppsAppIdPublishingRoute
   '/_authenticated/console/apps/$appId/redirects': typeof AuthenticatedConsoleAppsAppIdRedirectsRoute
   '/_authenticated/console/apps/$appId/scopes': typeof AuthenticatedConsoleAppsAppIdScopesRoute
   '/_authenticated/console/apps/$appId/security': typeof AuthenticatedConsoleAppsAppIdSecurityRoute
@@ -1168,8 +1198,11 @@ export interface FileRouteTypes {
     | '/api/public/session/logout'
     | '/api/public/webhooks/banking'
     | '/console/apps/'
+    | '/console/apps/$appId/advanced'
     | '/console/apps/$appId/branding'
     | '/console/apps/$appId/credentials'
+    | '/console/apps/$appId/overview'
+    | '/console/apps/$appId/publishing'
     | '/console/apps/$appId/redirects'
     | '/console/apps/$appId/scopes'
     | '/console/apps/$appId/security'
@@ -1278,8 +1311,11 @@ export interface FileRouteTypes {
     | '/api/public/session/logout'
     | '/api/public/webhooks/banking'
     | '/console/apps'
+    | '/console/apps/$appId/advanced'
     | '/console/apps/$appId/branding'
     | '/console/apps/$appId/credentials'
+    | '/console/apps/$appId/overview'
+    | '/console/apps/$appId/publishing'
     | '/console/apps/$appId/redirects'
     | '/console/apps/$appId/scopes'
     | '/console/apps/$appId/security'
@@ -1393,8 +1429,11 @@ export interface FileRouteTypes {
     | '/api_/public/session/logout'
     | '/api_/public/webhooks/banking'
     | '/_authenticated/console/apps/'
+    | '/_authenticated/console/apps/$appId/advanced'
     | '/_authenticated/console/apps/$appId/branding'
     | '/_authenticated/console/apps/$appId/credentials'
+    | '/_authenticated/console/apps/$appId/overview'
+    | '/_authenticated/console/apps/$appId/publishing'
     | '/_authenticated/console/apps/$appId/redirects'
     | '/_authenticated/console/apps/$appId/scopes'
     | '/_authenticated/console/apps/$appId/security'
@@ -2229,6 +2268,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedConsoleAppsAppIdIndexRouteImport
       parentRoute: typeof AuthenticatedConsoleAppsAppIdRoute
     }
+    '/_authenticated/console/apps/$appId/advanced': {
+      id: '/_authenticated/console/apps/$appId/advanced'
+      path: '/advanced'
+      fullPath: '/console/apps/$appId/advanced'
+      preLoaderRoute: typeof AuthenticatedConsoleAppsAppIdAdvancedRouteImport
+      parentRoute: typeof AuthenticatedConsoleAppsAppIdRoute
+    }
     '/_authenticated/console/apps/$appId/branding': {
       id: '/_authenticated/console/apps/$appId/branding'
       path: '/branding'
@@ -2241,6 +2287,20 @@ declare module '@tanstack/react-router' {
       path: '/credentials'
       fullPath: '/console/apps/$appId/credentials'
       preLoaderRoute: typeof AuthenticatedConsoleAppsAppIdCredentialsRouteImport
+      parentRoute: typeof AuthenticatedConsoleAppsAppIdRoute
+    }
+    '/_authenticated/console/apps/$appId/overview': {
+      id: '/_authenticated/console/apps/$appId/overview'
+      path: '/overview'
+      fullPath: '/console/apps/$appId/overview'
+      preLoaderRoute: typeof AuthenticatedConsoleAppsAppIdOverviewRouteImport
+      parentRoute: typeof AuthenticatedConsoleAppsAppIdRoute
+    }
+    '/_authenticated/console/apps/$appId/publishing': {
+      id: '/_authenticated/console/apps/$appId/publishing'
+      path: '/publishing'
+      fullPath: '/console/apps/$appId/publishing'
+      preLoaderRoute: typeof AuthenticatedConsoleAppsAppIdPublishingRouteImport
       parentRoute: typeof AuthenticatedConsoleAppsAppIdRoute
     }
     '/_authenticated/console/apps/$appId/redirects': {
@@ -2314,8 +2374,11 @@ const AuthenticatedAdminRouteWithChildren =
   AuthenticatedAdminRoute._addFileChildren(AuthenticatedAdminRouteChildren)
 
 interface AuthenticatedConsoleAppsAppIdRouteChildren {
+  AuthenticatedConsoleAppsAppIdAdvancedRoute: typeof AuthenticatedConsoleAppsAppIdAdvancedRoute
   AuthenticatedConsoleAppsAppIdBrandingRoute: typeof AuthenticatedConsoleAppsAppIdBrandingRoute
   AuthenticatedConsoleAppsAppIdCredentialsRoute: typeof AuthenticatedConsoleAppsAppIdCredentialsRoute
+  AuthenticatedConsoleAppsAppIdOverviewRoute: typeof AuthenticatedConsoleAppsAppIdOverviewRoute
+  AuthenticatedConsoleAppsAppIdPublishingRoute: typeof AuthenticatedConsoleAppsAppIdPublishingRoute
   AuthenticatedConsoleAppsAppIdRedirectsRoute: typeof AuthenticatedConsoleAppsAppIdRedirectsRoute
   AuthenticatedConsoleAppsAppIdScopesRoute: typeof AuthenticatedConsoleAppsAppIdScopesRoute
   AuthenticatedConsoleAppsAppIdSecurityRoute: typeof AuthenticatedConsoleAppsAppIdSecurityRoute
@@ -2324,10 +2387,16 @@ interface AuthenticatedConsoleAppsAppIdRouteChildren {
 
 const AuthenticatedConsoleAppsAppIdRouteChildren: AuthenticatedConsoleAppsAppIdRouteChildren =
   {
+    AuthenticatedConsoleAppsAppIdAdvancedRoute:
+      AuthenticatedConsoleAppsAppIdAdvancedRoute,
     AuthenticatedConsoleAppsAppIdBrandingRoute:
       AuthenticatedConsoleAppsAppIdBrandingRoute,
     AuthenticatedConsoleAppsAppIdCredentialsRoute:
       AuthenticatedConsoleAppsAppIdCredentialsRoute,
+    AuthenticatedConsoleAppsAppIdOverviewRoute:
+      AuthenticatedConsoleAppsAppIdOverviewRoute,
+    AuthenticatedConsoleAppsAppIdPublishingRoute:
+      AuthenticatedConsoleAppsAppIdPublishingRoute,
     AuthenticatedConsoleAppsAppIdRedirectsRoute:
       AuthenticatedConsoleAppsAppIdRedirectsRoute,
     AuthenticatedConsoleAppsAppIdScopesRoute:
