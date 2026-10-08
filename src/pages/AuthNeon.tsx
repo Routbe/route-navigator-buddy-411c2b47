@@ -228,7 +228,13 @@ export default function AuthNeon({ initialMode = "magic" }: { initialMode?: Mode
           window.location.href = body.url;
           return;
         }
-        toast.error(body?.message || "Deze aanmeldwijze is nog niet ingesteld.");
+        const name = provider.charAt(0).toUpperCase() + provider.slice(1);
+        toast.error(
+          body?.message ||
+            (res.status >= 500
+              ? `${name}-login faalt aan serverzijde. Probeer later opnieuw.`
+              : `${name}-login is nog niet ingesteld.`),
+        );
         return;
       }
       const result = await authClient.signIn.social({ provider: provider as never, callbackURL });
