@@ -25,4 +25,5 @@
 
 - Files live in Scaleway Object Storage via `src/lib/storage/s3.server.ts` (client bucket = member data under `users/<uid>/`, internal bucket = ROUT assets, admin-only); Neon stores only metadata. Why: keeps blobs out of the database and separates customer data from platform assets.
 - Temporary QR files are private objects with `expires_at` in `shared_files` (db/51), served only through `/f/<id>` presigned redirects and purged by cron. Why: shared links must stop working after expiry.
+- The Developer Console renders the shared site header (logo → home, language, profile) and Footer around its own sticky sidebar in `_authenticated/console.tsx`. Why: the console must feel like part of ROUT.
 - OAuth client console settings (publishing status, PKCE, token TTL, IP allowlist, account discovery) are enforced in `provider.server.ts`/`console.functions.ts` server-side, never only in the UI. Why: the console is the developer's control plane; the OIDC endpoints are the security boundary.

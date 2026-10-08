@@ -18,6 +18,9 @@ import {
   Webhook,
 } from "lucide-react";
 import { RoutLogo } from "@/components/RoutLogo";
+import { LanguageToggle } from "@/components/LanguageToggle";
+import { ProfileMenu } from "@/components/ProfileMenu";
+import { Footer } from "@/components/Footer";
 import { AppLogo } from "@/components/console/AppLogo";
 import { useConsoleApp } from "@/components/console/console-data";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -89,9 +92,8 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   const params = useParams({ strict: false }) as { appId?: string };
   return (
     <div className="flex h-full flex-col">
-      <Link to="/console" onClick={onNavigate} className="mb-8 flex items-center gap-3 px-3">
-        <RoutLogo size={22} />
-        <span className="border-l border-border pl-3 text-sm font-medium">Developer Console</span>
+      <Link to="/console" onClick={onNavigate} className="mb-6 px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground">
+        Developer Console
       </Link>
       <div className="flex-1">
         {params.appId ? <AppSidebar appId={params.appId} onNavigate={onNavigate} /> : <GlobalSidebar onNavigate={onNavigate} />}
@@ -106,26 +108,37 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
 function ConsoleWorkspace() {
   const [open, setOpen] = useState(false);
   return (
-    <div className="dark flex min-h-screen bg-background text-foreground">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-r border-border p-4 md:block">
-        <SidebarBody />
-      </aside>
+    <div className="dark flex min-h-screen flex-col bg-background text-foreground">
+      <header className="sticky top-0 z-40 w-full border-b border-border/50 bg-background/90 backdrop-blur-md">
+        <div className="flex h-16 items-center gap-3 px-4">
+          <button type="button" aria-label="Console menu" onClick={() => setOpen(true)} className="rounded-md p-1.5 hover:bg-muted md:hidden">
+            <Menu className="h-5 w-5" />
+          </button>
+          <a href="/" aria-label="ROUT home" className="shrink-0">
+            <RoutLogo size={28} />
+          </a>
+          <span className="hidden border-l border-border pl-3 text-sm text-muted-foreground sm:inline">Developer Console</span>
+          <div className="ml-auto flex items-center gap-2">
+            <LanguageToggle className="hidden sm:inline-flex" />
+            <ProfileMenu />
+          </div>
+        </div>
+      </header>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="left" className="dark w-72 border-border bg-background p-4 text-foreground">
           <SheetTitle className="sr-only">Console menu</SheetTitle>
           <SidebarBody onNavigate={() => setOpen(false)} />
         </SheetContent>
       </Sheet>
-      <div className="min-w-0 flex-1">
-        <div className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur md:hidden">
-          <button type="button" aria-label="Open menu" onClick={() => setOpen(true)} className="rounded-md p-1.5 hover:bg-muted">
-            <Menu className="h-5 w-5" />
-          </button>
-          <RoutLogo size={20} />
-          <span className="text-sm font-medium">Developer Console</span>
+      <div className="flex flex-1">
+        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-64 shrink-0 overflow-y-auto border-r border-border p-4 md:block">
+          <SidebarBody />
+        </aside>
+        <div className="min-w-0 flex-1">
+          <Outlet />
         </div>
-        <Outlet />
       </div>
+      <Footer />
     </div>
   );
 }

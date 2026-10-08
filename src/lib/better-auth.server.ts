@@ -2,7 +2,13 @@ import { createHash } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins/magic-link";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
-import { Pool } from "@neondatabase/serverless";
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import ws from "ws";
+
+// Vercel's Node runtime may lack a global WebSocket; the Neon Pool needs one.
+if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === "undefined") {
+  neonConfig.webSocketConstructor = ws as never;
+}
 import { APP_DOMAINS } from "@/lib/app-domains";
 import { canonicalAppUrl, isApprovedHost } from "@/lib/app-url";
 
@@ -105,13 +111,18 @@ export function createRoutAuth(request?: Request) {
       expiresIn: 60 * 15,
       sendMagicLink: async ({ email, url }) => {
         const { sendMail } = await import("@/emails/send.server");
-        await sendMail({
+        const result = await sendMail({
           to: email,
           subject: "Je inloglink voor ROUT",
           html: `<p>Klik om in te loggen bij ROUT:</p><p><a href="${url}">Inloggen</a></p><p>Deze link werkt 15 minuten en maar één keer.</p>`,
           text: `Log in bij ROUT: ${url}\n\nDeze link werkt 15 minuten en maar één keer.`,
           tags: ["magic-link"],
         });
+        if (!result.sent) {
+          console.error("[auth] magic link email failed:", result.error);
+          const { APIError } = await import("better-auth/api");
+          throw new APIError("SERVICE_UNAVAILABLE", { code: "EMAIL_SEND_FAILED", message: "We konden de inlogmail niet versturen. Probeer een wachtwoord of Google." });
+        }
       },
     }),
   ];
@@ -211,6 +222,24 @@ const PROVIDER_KEYS: Record<string, string[]> = {
   oidc: ["OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OIDC_DISCOVERY_URL"],
   infomaniak: ["INFOMANIAK_CLIENT_ID", "INFOMANIAK_CLIENT_SECRET"],
 };
+
+/** Live checks for the deploy: database reachable, email service configured. */
+export async function liveAuthChecks() {
+  let database = false;
+  let databaseError: string | null = null;
+  try {
+    const cs = env("DATABASE_URL");
+    if (cs) {
+      const pool = new Pool({ connectionString: cs });
+      await pool.query("select 1 from neon_auth.verification limit 1");
+      await pool.end();
+      database = true;
+    }
+  } catch (e) {
+    databaseError = e instanceof Error ? e.message.slice(0, 120) : "unknown";
+  }
+  return { database, databaseError, emailService: Boolean(env("BREVO_API_KEY")) };
+}
 
 /** Diagnostic report — names only, never values. */
 export function authDiagnostics(request?: Request) {
