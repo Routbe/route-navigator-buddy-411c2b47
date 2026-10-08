@@ -260,9 +260,13 @@ export default function AuthNeon({ initialMode = "magic" }: { initialMode?: Mode
     const address = email.trim().toLowerCase();
     try {
       const result = await authClient.signIn.magicLink({ email: address, callbackURL });
-      const error = (result as { error?: { message?: string } } | undefined)?.error;
+      const error = (result as { error?: { message?: string; code?: string } } | undefined)?.error;
       if (error) {
-        toast.error(error.message || t("auth.toast.signinFailed"));
+        toast.error(
+          error.code === "EMAIL_SEND_FAILED"
+            ? "We konden de inlogmail niet versturen. Probeer een wachtwoord of Google."
+            : error.message || t("auth.toast.signinFailed"),
+        );
         return;
       }
       setSentTo(address);

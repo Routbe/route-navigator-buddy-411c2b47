@@ -9,11 +9,11 @@ export const Route = createFileRoute("/api_/public/auth/providers")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const { enabledProviders, authDiagnostics } = await import("@/lib/better-auth.server");
+        const { enabledProviders, authDiagnostics, liveAuthChecks } = await import("@/lib/better-auth.server");
         const diagnose = new URL(request.url).searchParams.get("diagnose") === "1";
         return Response.json(
           diagnose
-            ? { enabled: enabledProviders(), ...authDiagnostics(request) }
+            ? { enabled: enabledProviders(), ...authDiagnostics(request), live: await liveAuthChecks() }
             : { providers: enabledProviders() },
           { headers: { "cache-control": "no-store" } },
         );
